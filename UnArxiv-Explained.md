@@ -409,7 +409,7 @@ If undergraduates or researchers actually *use* it and *cite* it in their own pr
 ## Timeline & Milestones
 
 **Week 1: Setup**
-- [ ] Install WSL2 Ubuntu, set up Python env, install IPEX-LLM
+- [ ] Set up Python env, install IPEX-LLM
 - [ ] Download `ccdv/arxiv-summarization`, filter for CS papers
 - [ ] Test that you can load Qwen-2.5-3B and run a forward pass (inference)
 - **Deliverable**: Model loads, you can ask it a question
