@@ -158,7 +158,7 @@ This is where you create your **actual training data**:
    - Avoid jargon. If you must use technical terms, explain them.
    - Use analogies and real-world examples.
    - Explain WHY this research matters (not just WHAT it does).
-   - Keep it under 150 words.
+   - Keep it under 200 words.
    - Make it engaging and curious-inducing.
    
    Original Abstract:
