@@ -32,11 +32,6 @@ def save_abstracts(abstracts:list, file_path="data/selected_abstracts.json"):
         raise CustomException(str(e), sys) from e
 
 if __name__ == "__main__":
-    from steps.dataset_downloader import download_arxiv_abstracts
-    from steps.abstracts_selector import select_abstracts
-    from steps.distillation import data_distillation
-
-    abstracts = download_arxiv_abstracts()
-    selected_abstracts = select_abstracts(abstracts)
-    distilled_abstracts = data_distillation(selected_abstracts)
-    save_abstracts(distilled_abstracts, file_path="data/distilled_abstracts.json")
+    example = ["This is an example abstract about machine learning.", 
+               "This is another example abstract about natural language processing."]
+    save_abstracts(example, file_path="data/example.json")

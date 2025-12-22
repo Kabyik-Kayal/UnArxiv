@@ -5,7 +5,7 @@ from utils.custom_exception import CustomException
 
 logger = get_logger(__name__)
 
-def select_abstracts(abstracts, num_abstracts=2500, seed=42):
+def select_abstracts(abstracts, num_abstracts=1000, seed=42):
     """
     Selects a random sample of abstracts from the provided list.
 
@@ -14,7 +14,7 @@ def select_abstracts(abstracts, num_abstracts=2500, seed=42):
 
     Args:
         abstracts (list): The list of abstracts to sample from.
-        num_abstracts (int): The number of abstracts to select. Default is 2000.
+        num_abstracts (int): The number of abstracts to select. Default is 1000.
     
     Returns:
         selected_abstracts (list): A list containing the selected abstracts.
