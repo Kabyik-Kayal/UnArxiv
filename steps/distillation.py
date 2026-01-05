@@ -99,8 +99,12 @@ def data_distillation(abstracts:list, api_key:str=GROQ_API_KEY):
         raise CustomException(str(e), sys) from e
     
 if __name__ == "__main__":
-    from steps.dataset_downloader import download_arxiv_abstracts
-    from steps.abstracts_selector import select_abstracts
-    abstracts = download_arxiv_abstracts()
-    selected_abstracts = select_abstracts(abstracts)
-    distilled_abstracts = data_distillation(selected_abstracts[:1])
+    try:
+        from steps.dataset_downloader import download_arxiv_abstracts
+        from steps.abstracts_selector import select_abstracts
+        abstracts = download_arxiv_abstracts()
+        selected_abstracts = select_abstracts(abstracts)
+        distilled_abstracts = data_distillation(selected_abstracts[:1])
+    except Exception as e:
+        logger.error(f"Distillation failed: {e}")
+        sys.exit(1)

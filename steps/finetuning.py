@@ -1,202 +1,255 @@
 import torch
 import os
+import warnings
+import gc
+import sys
 import transformers
 from datasets import load_dataset
-from transformers import AutoTokenizer, TrainingArguments
-from peft import LoraConfig
-from ipex_llm.transformers.qlora import get_peft_model, prepare_model_for_kbit_training
-from ipex_llm.transformers import AutoModelForCausalLM
-import gc
+from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments
+from peft import LoraConfig, get_peft_model
+from utils.logger import logging
+from utils.custom_exception import CustomException
 
-# Try to patch xe_linear requirement
-try:
-    import xe_linear
-except ImportError:
-    # Create a dummy xe_linear module to bypass the import
-    import sys
-    from types import ModuleType
-    xe_linear = ModuleType('xe_linear')
-    sys.modules['xe_linear'] = xe_linear
-    print("Warning: xe_linear not found, using fallback mode")
+warnings.filterwarnings('ignore', message='.*doesn\'t support querying the available free memory.*')
 
-# Disable XMX operations (which includes xe_linear)
-os.environ['BIGDL_LLM_XMX_DISABLED'] = '1'
-os.environ['SYCL_USE_XMX'] = '0'
-os.environ['SYCL_CACHE_PERSISTENT'] = '1'
-
-# CONFIGURATION
 MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
 DATA_FILE = "data/training_data.json" 
 OUTPUT_DIR = "model/qwen-arxiv-simplified-arc"
 
-# HARDWARE SETTINGS (STRICT 8GB MODE)
-# Optimization: With proper settings, we can likely increase Seq Length to 512
-MAX_SEQ_LENGTH = 512       
+# Aggressive memory settings for 8GB
+MAX_SEQ_LENGTH = 256        # Reduced from 512
 MICRO_BATCH_SIZE = 1       
-GRADIENT_ACCUMULATION = 8  
+GRADIENT_ACCUMULATION = 16  # Increased from 8
 LEARNING_RATE = 2e-4
 
+
+def clear_xpu_memory():
+    """Clear XPU memory cache to free up VRAM."""
+    try:
+        if torch.xpu.is_available():
+            torch.xpu.empty_cache()
+            torch.xpu.synchronize()
+            gc.collect()
+            torch.xpu.empty_cache()
+            logging.info("XPU memory cleared successfully")
+    except Exception as e:
+        logging.warning(f"Failed to clear XPU memory: {str(e)}")
+
+
 def main():
-    print(f"Initializing fine-tuning for {MODEL_NAME} on Intel Arc...")
+    try:
+        logging.info(f"Initializing fine-tuning for {MODEL_NAME} on Intel Arc...")
 
-    # --- CRITICAL FIX 2: XPU Availability Check ---
-    # Ensure we are using the XPU. If not, the script will silently fall back 
-    # to CPU (extremely slow) or crash.
-    if hasattr(torch, 'xpu') and torch.xpu.is_available():
+        # Check XPU availability
+        if not torch.xpu.is_available():
+            raise RuntimeError("Intel XPU not detected. Please ensure PyTorch XPU version is installed and Intel GPU Drivers are up to date.")
+        
         device = "xpu"
-        print(f"XPU Detected: {torch.xpu.get_device_name(0)}")
-        torch.xpu.empty_cache()
-    else:
-        raise RuntimeError(
-            "Intel XPU not detected. Please ensure 'intel_extension_for_pytorch' "
-            "is installed and you have sourced the OneAPI setvars script."
-        )
+        logging.info(f"XPU Device: {torch.xpu.get_device_name(0)}")
+        clear_xpu_memory()
 
-    # 1. Load Tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
-    tokenizer.pad_token_id = 0
-    tokenizer.padding_side = "left"
+        # Load tokenizer
+        logging.info("Loading tokenizer...")
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
+            tokenizer.pad_token_id = tokenizer.eos_token_id if tokenizer.pad_token_id is None else tokenizer.pad_token_id
+            tokenizer.padding_side = "right"
+            logging.info("Tokenizer loaded successfully")
+        except Exception as e:
+            raise CustomException(f"Failed to load tokenizer: {str(e)}", sys)
 
-    # 2. Load Dataset
-    print("Loading dataset...")
-    dataset = load_dataset("json", data_files=DATA_FILE, split="train")
-    print(f"Found {len(dataset)} training examples.")
+        # Load dataset
+        logging.info("Loading dataset...")
+        try:
+            if not os.path.exists(DATA_FILE):
+                raise FileNotFoundError(f"Training data file not found: {DATA_FILE}")
+            
+            dataset = load_dataset("json", data_files=DATA_FILE, split="train")
+            logging.info(f"Found {len(dataset)} training examples")
+            
+            if len(dataset) == 0:
+                raise ValueError("Dataset is empty. Please check the training data file.")
+        except Exception as e:
+            raise CustomException(f"Failed to load dataset: {str(e)}", sys)
 
-    # 2a. Preprocess dataset - convert to tokenized format
-    def preprocess_function(examples):
-        # Combine instruction, input, and output into chat format
-        texts = []
-        for i in range(len(examples['instruction'])):
-            text = f"<|im_start|>user\n{examples['instruction'][i]}\n\n{examples['input'][i]}<|im_end|>\n<|im_start|>assistant\n{examples['output'][i]}<|im_end|>"
-            texts.append(text)
+        def preprocess_function(examples):
+            try:
+                texts = []
+                for i in range(len(examples['instruction'])):
+                    text = f"<|im_start|>user\n{examples['instruction'][i]}\n\n{examples['input'][i]}<|im_end|>\n<|im_start|>assistant\n{examples['output'][i]}<|im_end|>"
+                    texts.append(text)
+                
+                model_inputs = tokenizer(
+                    texts,
+                    max_length=MAX_SEQ_LENGTH,
+                    truncation=True,
+                    padding=False,
+                )
+                
+                model_inputs["labels"] = model_inputs["input_ids"].copy()
+                return model_inputs
+            except KeyError as e:
+                raise CustomException(f"Missing required column in dataset: {str(e)}", sys)
         
-        # Tokenize
-        model_inputs = tokenizer(
-            texts,
-            max_length=MAX_SEQ_LENGTH,
-            truncation=True,
-            padding=False,  # DataCollator will handle padding
-        )
+        logging.info("Tokenizing dataset...")
+        try:
+            tokenized_dataset = dataset.map(
+                preprocess_function,
+                batched=True,
+                remove_columns=dataset.column_names,
+                desc="Tokenizing"
+            )
+            logging.info("Dataset tokenization complete")
+        except Exception as e:
+            raise CustomException(f"Failed to tokenize dataset: {str(e)}", sys)
+
+        # Load model in FP32 first (on CPU to save VRAM)
+        logging.info("Loading model on CPU first...")
+        clear_xpu_memory()
         
-        # For causal LM, labels are the same as input_ids
-        model_inputs["labels"] = model_inputs["input_ids"].copy()
-        return model_inputs
+        try:
+            model = AutoModelForCausalLM.from_pretrained(
+                MODEL_NAME,
+                trust_remote_code=True,
+                dtype=torch.float32,  # Load in FP32 on CPU
+                low_cpu_mem_usage=True,
+                device_map="cpu",  # Keep on CPU initially
+            )
+            logging.info("Model loaded on CPU successfully")
+        except Exception as e:
+            raise CustomException(f"Failed to load model: {str(e)}", sys)
+        
+        # Convert to BF16 and move to XPU layer by layer
+        logging.info("Converting to BF16 and moving to XPU...")
+        try:
+            model = model.to(torch.bfloat16)
+            model = model.to(device)
+            logging.info(f"Model loaded on device: {next(model.parameters()).device}")
+        except Exception as e:
+            raise CustomException(f"Failed to move model to XPU: {str(e)}", sys)
     
-    print("Tokenizing dataset...")
-    tokenized_dataset = dataset.map(
-        preprocess_function,
-        batched=True,
-        remove_columns=dataset.column_names,
-        desc="Tokenizing"
-    )
+        # Configure for training
+        logging.info("Configuring model for training...")
+        try:
+            model.config.use_cache = False
+            model.gradient_checkpointing_enable()
+            
+            # Enable input gradients
+            if hasattr(model, 'enable_input_require_grads'):
+                model.enable_input_require_grads()
+            else:
+                def make_inputs_require_grad(module, input, output):
+                    output.requires_grad_(True)
+                model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
+            logging.info("Model configuration complete")
+        except Exception as e:
+            raise CustomException(f"Failed to configure model: {str(e)}", sys)
 
-    # 3. Load Model (8-bit Optimized for Arc)
-    print("Loading model in 8-bit quantization (low memory mode)...")
-    # Clear cache multiple times to ensure maximum available memory
-    # Clear both XPU and CPU memory cache
-    torch.xpu.empty_cache()
-    torch.xpu.synchronize()
-    gc.collect()
-    torch.xpu.empty_cache()
-    torch.xpu.synchronize()
-    
-    # Use IPEX-LLM specific load_in_low_bit for Intel Arc
-    # Using sym_int8 for 8-bit quantization (better quality than nf4)
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
-        load_in_low_bit="sym_int8",  # 8-bit symmetric quantization
-        optimize_model=False,
-        torch_dtype=torch.bfloat16,
-        trust_remote_code=True,
-        low_cpu_mem_usage=True,  # Reduce CPU RAM during loading
-        modules_to_not_convert=["lm_head"],
-    )
-    # Print model size before moving to XPU
-    def get_model_size_mb(model):
-        """Calculate model size in MB"""
-        total_params = sum(p.numel() for p in model.parameters())
-        total_bytes = sum(p.numel() * p.element_size() for p in model.parameters())
-        return total_bytes / (1024 ** 2)
+        # LoRA with minimal rank to save memory
+        logging.info("Applying LoRA adapters...")
+        try:
+            peft_config = LoraConfig(
+                r=2,  # Minimal rank for 8GB VRAM
+                lora_alpha=8,
+                lora_dropout=0.05,
+                bias="none",
+                task_type="CAUSAL_LM",
+                target_modules=["q_proj", "v_proj"]  # Only Q and V projections
+            )
+            
+            model = get_peft_model(model, peft_config)
+            model.print_trainable_parameters()
+            logging.info("LoRA adapters applied successfully")
+        except Exception as e:
+            raise CustomException(f"Failed to apply LoRA adapters: {str(e)}", sys)
+        
+        clear_xpu_memory()
 
-    model_size_mb = get_model_size_mb(model)
-    print(f"Model size before XPU transfer: {model_size_mb:.2f} MB")
+        # Training args
+        logging.info("Setting up training arguments...")
+        try:
+            os.makedirs(OUTPUT_DIR, exist_ok=True)
+            
+            args = TrainingArguments(
+                output_dir=OUTPUT_DIR,
+                per_device_train_batch_size=MICRO_BATCH_SIZE,
+                gradient_accumulation_steps=GRADIENT_ACCUMULATION,
+                warmup_steps=10,
+                max_steps=150,
+                learning_rate=LEARNING_RATE,
+                bf16=True,
+                logging_steps=15,
+                optim="adamw_torch",
+                save_steps=75,
+                gradient_checkpointing=True,
+                max_grad_norm=0.3,
+                remove_unused_columns=False,
+                dataloader_pin_memory=False,
+                dataloader_num_workers=0,
+                fp16=False,
+                report_to="none",  # Disable wandb/tensorboard to save memory
+            )
+            logging.info("Training arguments configured")
+        except Exception as e:
+            raise CustomException(f"Failed to configure training arguments: {str(e)}", sys)
 
-    # CRITICAL: Disable gradient checkpointing BEFORE moving to XPU
-    model.config.use_cache = False  # Required for training
-    model.config.gradient_checkpointing = False  # Disable in config
-    model.gradient_checkpointing = False  # Disable at model level
-    if hasattr(model, '_gradient_checkpointing_func'):
-        model._gradient_checkpointing_func = None
-    if hasattr(model, 'gradient_checkpointing_disable'):
-        model.gradient_checkpointing_disable()
-    if hasattr(model, 'enable_input_require_grads'):
-        model.enable_input_require_grads()
-    
-    # Now move to XPU (model is already in 4-bit format)
-    print("Moving model to XPU...")
-    torch.xpu.empty_cache()
-    model = model.to(device)
-    print(f"Model loaded on device: {next(model.parameters()).device}")
-    
-    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=False)
+        logging.info("Initializing trainer...")
+        try:
+            trainer = transformers.Trainer(
+                model=model,
+                train_dataset=tokenized_dataset,
+                args=args,
+                data_collator=transformers.DataCollatorForSeq2Seq(
+                    tokenizer, 
+                    pad_to_multiple_of=8, 
+                    return_tensors="pt", 
+                    padding=True
+                ),
+            )
+            logging.info("Trainer initialized successfully")
+        except Exception as e:
+            raise CustomException(f"Failed to initialize trainer: {str(e)}", sys)
 
-    # 4. LoRA Configuration (Memory Optimized)
-    print("Applying LoRA adapters...")
-    # Reduced r from 8 to 4 to decrease memory usage
-    peft_config = LoraConfig(
-        r=4,
-        lora_alpha=16,
-        lora_dropout=0.05,
-        bias="none",
-        task_type="CAUSAL_LM",
-        target_modules=["q_proj", "k_proj", "v_proj"]
-    )
-    
-    model = get_peft_model(model, peft_config)
-    model.print_trainable_parameters()
-    
-    # Clear cache to ensure max VRAM availability before training loop
-    torch.xpu.empty_cache()
+        logging.info("Starting training...")
+        try:
+            result = trainer.train()
+            logging.info(f"Training completed: {result}")
+        except torch.OutOfMemoryError as e:
+            logging.error("Out of memory error during training")
+            logging.error("Suggestions to reduce memory usage:")
+            logging.error("1. Use Qwen2.5-1.5B-Instruct instead")
+            logging.error("2. Reduce MAX_SEQ_LENGTH to 128")
+            logging.error("3. Set LoRA r=1")
+            raise CustomException(f"Out of memory during training: {str(e)}", sys)
+        except KeyboardInterrupt:
+            logging.warning("Training interrupted by user")
+            raise
+        except Exception as e:
+            raise CustomException(f"Training failed: {str(e)}", sys)
 
-    # 5. Training Arguments (Memory Optimized)
-    args = TrainingArguments(
-        output_dir=OUTPUT_DIR,
-        per_device_train_batch_size=MICRO_BATCH_SIZE,
-        gradient_accumulation_steps=GRADIENT_ACCUMULATION,
-        warmup_steps=10,
-        max_steps=150,
-        learning_rate=LEARNING_RATE,
-        bf16=True,  # bf16 is more stable in training
-        logging_steps=15,
-        optim="adamw_torch",  # Standard PyTorch AdamW optimizer
-        save_steps=75,
-        gradient_checkpointing=False,  # CRITICAL: Must be False to avoid xe_linear
-        gradient_checkpointing_kwargs=None,
-        max_grad_norm=0.3,  # Gradient clipping for stability
-        use_cpu=False,  # Explicitly use XPU
-    )
+        logging.info("Saving adapter and tokenizer...")
+        try:
+            trainer.model.save_pretrained(OUTPUT_DIR)
+            tokenizer.save_pretrained(OUTPUT_DIR)
+            logging.info(f"Model and tokenizer saved successfully to {OUTPUT_DIR}")
+        except Exception as e:
+            raise CustomException(f"Failed to save model: {str(e)}", sys)
+            
+    except CustomException:
+        raise
+    except Exception as e:
+        raise CustomException(f"Unexpected error during fine-tuning: {str(e)}", sys)
 
-    # 6. Trainer
-    trainer = transformers.Trainer(
-        model=model,
-        train_dataset=tokenized_dataset,
-        args=args,
-        data_collator=transformers.DataCollatorForSeq2Seq(
-            tokenizer, pad_to_multiple_of=8, return_tensors="pt", padding=True
-        ),
-    )
-
-    # 7. Start Training
-    print("Starting training on Intel XPU...")
-    result = trainer.train()
-    print(result)
-
-    # 8. Save Model
-    print("Saving adapter...")
-    # Note: Saving usually saves only the adapter weights
-    trainer.model.save_pretrained(OUTPUT_DIR)
-    tokenizer.save_pretrained(OUTPUT_DIR)
-    print(f"Done! Model saved to {OUTPUT_DIR}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except CustomException as e:
+        logging.error(f"Fine-tuning failed: {str(e)}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        logging.warning("Fine-tuning interrupted by user")
+        sys.exit(0)
+    except Exception as e:
+        logging.error(f"Unexpected error: {str(e)}")
+        sys.exit(1)

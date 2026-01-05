@@ -1,8 +1,10 @@
 import json
 import sys
 import os
-from utils.logger import logging
+from utils.logger import get_logger
 from utils.custom_exception import CustomException
+
+logger = get_logger(__name__)
 
 
 class TrainingDataGenerator:
@@ -16,16 +18,16 @@ class TrainingDataGenerator:
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            logging.info(f"Successfully loaded {filepath}")
+            logger.info(f"Successfully loaded {filepath}")
             return data
         except Exception as e:
-            logging.error(f"Error loading {filepath}: {str(e)}")
+            logger.error(f"Error loading {filepath}: {str(e)}")
             raise CustomException(e, sys)
     
     def create_training_data(self):
         """Create training data by pairing original and simplified abstracts"""
         try:
-            logging.info("Starting training data generation")
+            logger.info("Starting training data generation")
             
             # Load both datasets
             selected_abstracts = self.load_json_file(self.selected_abstracts_path)
@@ -45,18 +47,18 @@ class TrainingDataGenerator:
                 }
                 training_data.append(training_example)
             
-            logging.info(f"Created {len(training_data)} training examples")
+            logger.info(f"Created {len(training_data)} training examples")
             
             # Save training data
+            os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
             with open(self.output_path, 'w', encoding='utf-8') as f:
-                json.dump(training_data, f, indent=2, ensure_ascii=False)
-            
-            logging.info(f"Training data saved to {self.output_path}")
+                json.dump(training_data, f, ensure_ascii=False, indent=4)
+            logger.info(f"Successfully saved training data to {self.output_path}")
             
             return self.output_path
             
         except Exception as e:
-            logging.error(f"Error creating training data: {str(e)}")
+            logger.error(f"Error creating training data: {str(e)}")
             raise CustomException(e, sys)
 
 
@@ -64,7 +66,7 @@ if __name__ == "__main__":
     try:
         generator = TrainingDataGenerator()
         output_file = generator.create_training_data()
-        print(f"Training data successfully created: {output_file}")
+        logger.info(f"Training data successfully created: {output_file}")
     except Exception as e:
-        logging.error(f"Failed to create training data: {str(e)}")
-        raise CustomException(e, sys)
+        logger.error(f"Failed to create training data: {str(e)}")
+        sys.exit(1)

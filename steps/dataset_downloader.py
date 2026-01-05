@@ -32,4 +32,8 @@ def download_arxiv_abstracts():
         raise CustomException(str(e), sys) from e
 
 if __name__ == "__main__":
-    abstracts = download_arxiv_abstracts()
+    try:
+        abstracts = download_arxiv_abstracts()
+    except Exception as e:
+        logger.error(f"Download failed: {e}")
+        sys.exit(1)

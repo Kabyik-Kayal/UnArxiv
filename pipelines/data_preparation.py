@@ -21,14 +21,21 @@ def data_preparation():
     5. Save distilled abstracts.
     6. Create Training data combining the distilled abstracts with selected abstracts.
     """
-    logger.info("Starting data preparation pipeline...")
-    abstracts = download_arxiv_abstracts()
-    selected_abstracts = select_abstracts(abstracts)
-    save_abstracts(selected_abstracts, file_path="data/selected_abstracts.json")
-    distilled_abstracts = data_distillation(selected_abstracts)
-    save_abstracts(distilled_abstracts, file_path="data/distilled_abstracts.json")
-    generator.create_training_data()
-    logger.info("Data preparation pipeline completed successfully.")
+    try:
+        logger.info("Starting data preparation pipeline...")
+        abstracts = download_arxiv_abstracts()
+        selected_abstracts = select_abstracts(abstracts)
+        save_abstracts(selected_abstracts, file_path="data/selected_abstracts.json")
+        distilled_abstracts = data_distillation(selected_abstracts)
+        save_abstracts(distilled_abstracts, file_path="data/distilled_abstracts.json")
+        generator.create_training_data()
+        logger.info("Data preparation pipeline completed successfully.")
+    except Exception as e:
+        raise CustomException(e, sys)
 
 if __name__ == "__main__":
-    data_preparation()
+    try:
+        data_preparation()
+    except Exception as e:
+        logger.error(f"Pipeline failed: {e}")
+        sys.exit(1)

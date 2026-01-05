@@ -32,6 +32,10 @@ def select_abstracts(abstracts, num_abstracts=1000, seed=42):
     
 
 if __name__ == "__main__":
-    from steps.dataset_downloader import download_arxiv_abstracts
-    abstracts = download_arxiv_abstracts()
-    selected_abstracts = select_abstracts(abstracts)
+    try:
+        from steps.dataset_downloader import download_arxiv_abstracts
+        abstracts = download_arxiv_abstracts()
+        selected_abstracts = select_abstracts(abstracts)
+    except Exception as e:
+        logger.error(f"Selection failed: {e}")
+        sys.exit(1)
