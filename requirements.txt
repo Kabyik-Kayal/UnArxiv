@@ -1,3 +1,4 @@
+absl-py==2.3.1
 accelerate==1.12.0
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.3
@@ -31,11 +32,13 @@ intel-cmplr-lic-rt==2025.0.5
 intel-pti==0.10.1
 intel-sycl-rt==2025.0.5
 Jinja2==3.1.6
+joblib==1.5.3
 MarkupSafe==3.0.3
 mpmath==1.3.0
 multidict==6.7.0
 multiprocess==0.70.18
 networkx==3.6.1
+nltk==3.9.2
 numpy==2.4.0
 packaging==25.0
 pandas==2.3.3
@@ -46,6 +49,7 @@ psutil==7.2.1
 pyarrow==22.0.0
 pydantic==2.12.5
 pydantic_core==2.41.5
+pyphen==0.17.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.0
 pytorch-triton-xpu==3.3.1
@@ -53,6 +57,7 @@ pytz==2025.2
 PyYAML==6.0.3
 regex==2025.11.3
 requests==2.32.5
+rouge_score==0.1.2
 safetensors==0.7.0
 scipy==1.16.3
 shellingham==1.5.4
@@ -60,6 +65,7 @@ six==1.17.0
 sniffio==1.3.1
 sympy==1.14.0
 tcmlib==1.2.0
+textstat==0.7.12
 tokenizers==0.22.1
 torch==2.7.1+xpu
 torchaudio==2.7.1+xpu

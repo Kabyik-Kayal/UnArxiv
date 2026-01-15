@@ -16,6 +16,7 @@ eggs/
 .eggs/
 pip-wheel-metadata/
 wheelhouse/
+logs/
 
 # Installer logs
 pip-log.txt
