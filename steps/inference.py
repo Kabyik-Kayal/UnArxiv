@@ -6,6 +6,7 @@ NOTE: Model is loaded inside main() to avoid module-level initialization issues.
 """
 
 import torch
+from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 import sys
@@ -29,56 +30,69 @@ def load_model():
         except:
             pass
     
-    # Load base model
-    logger.info("Loading base model...")
+    # Loading steps with progress
+    steps = ["Loading base model", "Moving to device", "Loading LoRA adapter", "Loading tokenizer"]
+    pbar = tqdm(steps, desc="Loading model", unit="step")
+    
+    # Step 1: Load base model
+    pbar.set_description("Loading base model")
     base_model = AutoModelForCausalLM.from_pretrained(
         "Qwen/Qwen2.5-3B-Instruct",
         device_map="cpu",
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
     )
+    pbar.update(1)
     
-    # Move to device
+    # Step 2: Move to device
+    pbar.set_description("Moving to device")
     base_model = base_model.to(device)
     base_model.eval()
+    pbar.update(1)
     
-    # Load LoRA adapter
-    logger.info("Loading LoRA adapter...")
+    # Step 3: Load LoRA adapter
+    pbar.set_description("Loading LoRA adapter")
     model = PeftModel.from_pretrained(base_model, "model/qwen-arxiv-simplified-arc")
     model.eval()
+    pbar.update(1)
     
-    # Load tokenizer
+    # Step 4: Load tokenizer
+    pbar.set_description("Loading tokenizer")
     tokenizer = AutoTokenizer.from_pretrained(
         "model/qwen-arxiv-simplified-arc",
         trust_remote_code=True
     )
+    pbar.update(1)
+    pbar.close()
     
     return model, tokenizer, device
 
 
 def simplify_arxiv(model, tokenizer, device, abstract):
     """Generate a simplified explanation of an arXiv abstract."""
-    prompt = f"<|im_start|>user\nSimplify the following scientific abstract into plain language that anyone can understand. Use simple words, short sentences, and everyday analogies.\n\n{abstract}<|im_end|>\n<|im_start|>assistant\n"
+    messages = [
+        {"role": "user", "content": f"Simplify the following scientific abstract into plain language that anyone can understand. Use simple words, short sentences, and everyday analogies.\n\n{abstract}"},
+    ]
     
-    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    inputs = tokenizer.apply_chat_template(
+        messages,
+        add_generation_prompt=True,
+        tokenize=True,
+        return_dict=True,
+        return_tensors="pt",
+    ).to(device)
     
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
             max_new_tokens=512,
-            temperature=0.5,
-            do_sample=True,
+            do_sample=False,
             eos_token_id=tokenizer.eos_token_id,
             pad_token_id=tokenizer.eos_token_id
         )
     
-    # Decode and extract assistant's response
-    result = tokenizer.decode(outputs[0], skip_special_tokens=False)
-    if "<|im_start|>assistant" in result:
-        result = result.split("<|im_start|>assistant")[-1]
-        if "<|im_end|>" in result:
-            result = result.split("<|im_end|>")[0]
-    
+    # Decode only the generated portion (exclude input prompt)
+    result = tokenizer.decode(outputs[0][inputs["input_ids"].shape[-1]:], skip_special_tokens=True)
     return result.strip()
 
 
@@ -88,15 +102,7 @@ def main():
         model, tokenizer, device = load_model()
         
         logger.info("Starting inference test...")
-        test_abstract = """we comment on zero- and low - temperature structural phase transitions , expecting that these comments might be relevant not only for this structural case . 
- we first consider a textbook model whose classical version is the only model for which the landau theory of phase transitions and the concept of `` soft mode '' introduced by ginzburg are exact . within this model 
- , we reveal the effects of quantum fluctuations and thermal ones at low temperatures . 
- to do so , the knowledge of the dynamics of the model is needed . however , as already was emphasized by ginzburg _ 
- et al . 
- _ in eighties , a realistic theory for such a dynamics at high temperatures is lacking , what also seems to be the case in the low temperature regime . 
- consequently , some theoretical conclusions turn out to be dependent on the assumptions on this dynamics . 
- we illustrate this point with the low - temperature phase diagram , and discuss some unexpected shortcomings of the continuous medium approaches."""
-        
+        test_abstract = """The relationship between computing systems and the brain has served as motivation for pioneering theoreticians since John von Neumann and Alan Turing. Uniform, scale-free biological networks, such as the brain, have powerful properties, including generalizing over time, which is the main barrier for Machine Learning on the path to Universal Reasoning Models. We introduce `Dragon Hatchling' (BDH), a new Large Language Model architecture based on a scale-free biologically inspired network of $n$ locally-interacting neuron particles. BDH couples strong theoretical foundations and inherent interpretability without sacrificing Transformer-like performance. BDH is a practical, performant state-of-the-art attention-based state space sequence learning architecture. In addition to being a graph model, BDH admits a GPU-friendly formulation. It exhibits Transformer-like scaling laws: empirically BDH rivals GPT2 performance on language and translation tasks, at the same number of parameters (10M to 1B), for the same training data. BDH can be represented as a brain model. The working memory of BDH during inference entirely relies on synaptic plasticity with Hebbian learning using spiking neurons. We confirm empirically that specific, individual synapses strengthen connection whenever BDH hears or reasons about a specific concept while processing language inputs. The neuron interaction network of BDH is a graph of high modularity with heavy-tailed degree distribution. The BDH model is biologically plausible, explaining one possible mechanism which human neurons could use to achieve speech. BDH is designed for interpretability. Activation vectors of BDH are sparse and positive. We demonstrate monosemanticity in BDH on language tasks. Interpretability of state, which goes beyond interpretability of neurons and model parameters, is an inherent feature of the BDH architecture."""
         result = simplify_arxiv(model, tokenizer, device, test_abstract)
         print("\n" + "="*80)
         print("SIMPLIFIED EXPLANATION:")
