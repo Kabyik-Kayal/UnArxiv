@@ -5,6 +5,7 @@ Generates simplified explanations of arXiv abstracts.
 NOTE: Model is loaded inside main() to avoid module-level initialization issues.
 """
 
+import gc
 import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -15,6 +16,9 @@ from utils.custom_exception import CustomException
 
 # Initialize logger
 logger = get_logger(__name__)
+
+# Track inference count for periodic cleanup
+_inference_count = 0
 
 
 def load_model():
@@ -87,12 +91,35 @@ def simplify_arxiv(model, tokenizer, device, abstract):
             **inputs,
             max_new_tokens=512,
             do_sample=False,
+            temperature=None,
+            top_p=None,
+            top_k=None,
             eos_token_id=tokenizer.eos_token_id,
             pad_token_id=tokenizer.eos_token_id
         )
     
     # Decode only the generated portion (exclude input prompt)
     result = tokenizer.decode(outputs[0][inputs["input_ids"].shape[-1]:], skip_special_tokens=True)
+    
+    # Clean up tensors
+    del inputs
+    del outputs
+    
+    # Periodic memory cleanup every 5 samples
+    global _inference_count
+    _inference_count += 1
+    if _inference_count % 5 == 0:
+        # Clear KV cache if available
+        if hasattr(model, '_clear_kv_cache'):
+            model._clear_kv_cache()
+        elif hasattr(model, 'model') and hasattr(model.model, '_clear_kv_cache'):
+            model.model._clear_kv_cache()
+        gc.collect()
+        if device == "xpu":
+            torch.xpu.synchronize()
+            torch.xpu.empty_cache()
+        logger.info(f"Memory cleanup (including KV cache) after {_inference_count} samples")
+    
     return result.strip()
 
 

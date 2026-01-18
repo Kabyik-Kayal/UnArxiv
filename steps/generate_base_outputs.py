@@ -92,8 +92,7 @@ def main():
         logger.info("Loading BASE model (Qwen2.5-3B-Instruct)...")
         model = AutoModelForCausalLM.from_pretrained(
             "Qwen/Qwen2.5-3B-Instruct",
-            device_map="cpu",
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             trust_remote_code=True,
         )
         model = model.to(device)
@@ -114,10 +113,16 @@ def main():
             
             # Memory cleanup every 5 samples
             if (i + 1) % 5 == 0:
+                # Clear KV cache if available
+                if hasattr(model, '_clear_kv_cache'):
+                    model._clear_kv_cache()
+                elif hasattr(model, 'model') and hasattr(model.model, '_clear_kv_cache'):
+                    model.model._clear_kv_cache()
                 gc.collect()
                 if device == "xpu":
+                    torch.xpu.synchronize()
                     torch.xpu.empty_cache()
-                logger.info(f"Memory cleanup after {i+1} samples")
+                logger.info(f"Memory cleanup (including KV cache) after {i+1} samples")
         
         # Save results
         results = {
