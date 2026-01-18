@@ -1,20 +1,15 @@
 """
-Evaluation script for UnArxiv: Compares base model vs finetuned model outputs.
-Loads models sequentially to save memory.
+Compute evaluation metrics comparing base vs finetuned model outputs.
+Loads pre-generated outputs from JSON files.
 """
 
 import json
 import sys
 import os
-import gc
 import argparse
 from datetime import datetime
 from typing import Dict, List
 
-import torch
-from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from peft import PeftModel
 from rouge_score import rouge_scorer
 import textstat
 
@@ -22,109 +17,6 @@ from utils.logger import get_logger
 from utils.custom_exception import CustomException
 
 logger = get_logger(__name__)
-
-
-def get_device():
-    """Always use XPU."""
-    logger.info("Using device: xpu")
-    return "xpu"
-
-
-def unload_model(model, tokenizer):
-    """Unload model and free memory."""
-    del model
-    del tokenizer
-    gc.collect()
-    torch.xpu.empty_cache()
-    logger.info("Model unloaded and memory freed")
-
-
-def generate_with_base_model(abstracts: List[str], device: str) -> List[str]:
-    """Load base model, generate outputs for all abstracts, then unload."""
-    logger.info("Loading BASE model (Qwen2.5-3B-Instruct)...")
-    
-    # Match inference.py loading approach
-    model = AutoModelForCausalLM.from_pretrained(
-        "Qwen/Qwen2.5-3B-Instruct",
-        device_map="cpu",
-        torch_dtype=torch.bfloat16,
-        trust_remote_code=True,
-    )
-    model = model.to(device)
-    model.eval()
-    logger.info(f"Base model loaded on {device}")
-    
-    tokenizer = AutoTokenizer.from_pretrained(
-        "Qwen/Qwen2.5-3B-Instruct",
-        trust_remote_code=True
-    )
-    
-    outputs = []
-    for i, abstract in enumerate(tqdm(abstracts, desc="Base model", unit="sample")):
-        output = generate_single(model, tokenizer, abstract, device)
-        logger.info(f"Base output {i+1}: {output[:100]}...")
-        outputs.append(output)
-    
-    unload_model(model, tokenizer)
-    return outputs
-
-
-def generate_with_finetuned_model(abstracts: List[str], device: str, adapter_path: str) -> List[str]:
-    """Load finetuned model, generate outputs for all abstracts, then unload."""
-    logger.info("Loading FINETUNED model...")
-    
-    # Match inference.py loading approach
-    base_model = AutoModelForCausalLM.from_pretrained(
-        "Qwen/Qwen2.5-3B-Instruct",
-        device_map="cpu",
-        torch_dtype=torch.bfloat16,
-        trust_remote_code=True,
-    )
-    base_model = base_model.to(device)
-    base_model.eval()
-    
-    model = PeftModel.from_pretrained(base_model, adapter_path)
-    model.eval()
-    logger.info(f"Finetuned model loaded on {device}")
-    
-    tokenizer = AutoTokenizer.from_pretrained(adapter_path, trust_remote_code=True)
-    
-    outputs = []
-    for i, abstract in enumerate(tqdm(abstracts, desc="Finetuned model", unit="sample")):
-        output = generate_single(model, tokenizer, abstract, device)
-        logger.info(f"Finetuned output {i+1}: {output[:100]}...")
-        outputs.append(output)
-    
-    unload_model(model, tokenizer)
-    return outputs
-
-
-def generate_single(model, tokenizer, abstract: str, device: str) -> str:
-    """Generate a single simplified abstract using proper chat template."""
-    messages = [
-        {"role": "user", "content": f"Simplify the following scientific abstract into plain language that anyone can understand. Use simple words, short sentences, and everyday analogies.\n\n{abstract}"},
-    ]
-    
-    inputs = tokenizer.apply_chat_template(
-        messages,
-        add_generation_prompt=True,
-        tokenize=True,
-        return_dict=True,
-        return_tensors="pt",
-    ).to(device)
-    
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=512,
-            do_sample=False,
-            eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id
-        )
-    
-    # Decode only the generated portion (exclude input prompt)
-    result = tokenizer.decode(outputs[0][inputs["input_ids"].shape[-1]:], skip_special_tokens=True)
-    return result.strip()
 
 
 def compute_rouge(prediction: str, reference: str) -> Dict[str, float]:
@@ -150,6 +42,22 @@ def compute_readability(text: str) -> Dict[str, float]:
     }
 
 
+def is_valid_output(text: str, name: str, sample_idx: int) -> bool:
+    """Check if output is valid (not corrupted)."""
+    words = len(text.split())
+    if words < 15:
+        logger.warning(f"Sample {sample_idx} {name} too short: {words} words")
+        return False
+    
+    corrupt_patterns = ["userassistant", "usereditor", "userdivider", "<|im_start|>", "<|im_end|>"]
+    for pattern in corrupt_patterns:
+        if pattern in text.lower():
+            logger.warning(f"Sample {sample_idx} {name} contains corruption pattern: {pattern}")
+            return False
+    
+    return True
+
+
 def compare_results(
     abstracts: List[str],
     references: List[str],
@@ -166,22 +74,10 @@ def compare_results(
     valid_count = 0
     
     for i, (abstract, ref, base_out, ft_out) in enumerate(zip(abstracts, references, base_outputs, finetuned_outputs)):
-        # Log what we're getting
         logger.info(f"Sample {i+1} base words: {len(base_out.split())}, ft words: {len(ft_out.split())}")
         
-        # Validate outputs - skip if corrupted
-        def is_valid_output(text: str, name: str) -> bool:
-            words = len(text.split())
-            if words < 15:
-                logger.warning(f"  {name} too short: {words} words")
-                return False
-            if "<|im_start|>" in text or "<|im_end|>" in text:
-                logger.warning(f"  {name} contains special tokens")
-                return False
-            return True
-        
-        base_valid = is_valid_output(base_out, "Base")
-        ft_valid = is_valid_output(ft_out, "Finetuned")
+        base_valid = is_valid_output(base_out, "Base", i+1)
+        ft_valid = is_valid_output(ft_out, "Finetuned", i+1)
         
         if not base_valid or not ft_valid:
             logger.warning(f"Sample {i+1}: Skipping due to invalid output")
@@ -280,42 +176,35 @@ def print_summary(results: Dict):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate UnArxiv models")
-    parser.add_argument("--test-size", type=int, default=10)
-    parser.add_argument("--data-path", type=str, default="data/training_data.json")
-    parser.add_argument("--adapter-path", type=str, default="model/qwen-arxiv-simplified-arc")
+    parser = argparse.ArgumentParser(description="Compute evaluation metrics")
+    parser.add_argument("--base-outputs", type=str, default="logs/base_outputs.json")
+    parser.add_argument("--finetuned-outputs", type=str, default="logs/finetuned_outputs.json")
     parser.add_argument("--output-path", type=str, default="logs/evaluation_results.json")
-    parser.add_argument("--test-split", type=float, default=0.9)
     args = parser.parse_args()
     
     try:
-        # Load test data
-        logger.info(f"Loading data from {args.data_path}")
-        with open(args.data_path, 'r', encoding='utf-8') as f:
-            all_data = json.load(f)
+        # Load outputs
+        logger.info(f"Loading base outputs from {args.base_outputs}")
+        with open(args.base_outputs, 'r', encoding='utf-8') as f:
+            base_data = json.load(f)
         
-        split_idx = int(len(all_data) * args.test_split)
-        test_data = all_data[split_idx:][:args.test_size]
+        logger.info(f"Loading finetuned outputs from {args.finetuned_outputs}")
+        with open(args.finetuned_outputs, 'r', encoding='utf-8') as f:
+            finetuned_data = json.load(f)
         
-        abstracts = [d["input"] for d in test_data]
-        references = [d["output"] for d in test_data]
+        # Extract data
+        abstracts = base_data["abstracts"]
+        references = base_data["references"]
+        base_outputs = base_data["outputs"]
+        finetuned_outputs = finetuned_data["outputs"]
         
-        device = get_device()
-        logger.info(f"Using device: {device}")
-        
-        # Step 1: Generate with base model, then unload
-        base_outputs = generate_with_base_model(abstracts, device)
-        
-        # Step 2: Generate with finetuned model, then unload
-        finetuned_outputs = generate_with_finetuned_model(abstracts, device, args.adapter_path)
-        
-        # Step 3: Compare results
-        logger.info("Comparing results...")
+        # Compare
+        logger.info("Computing metrics...")
         results = compare_results(abstracts, references, base_outputs, finetuned_outputs)
         results["metadata"] = {
             "timestamp": datetime.now().isoformat(),
-            "test_size": args.test_size,
-            "adapter_path": args.adapter_path,
+            "base_outputs_file": args.base_outputs,
+            "finetuned_outputs_file": args.finetuned_outputs,
         }
         
         # Print and save
