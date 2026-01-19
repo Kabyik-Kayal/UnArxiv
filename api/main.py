@@ -1,42 +1,68 @@
 """
 FastAPI backend for the UnArxiv model.
-Provides streaming summarization of arXiv abstracts.
+
+Provides streaming and non-streaming summarization of arXiv abstracts
+using a fine-tuned Qwen2.5-3B model.
+
+Endpoints:
+    GET  /              - Serve the web frontend
+    GET  /api           - API information
+    GET  /health        - Health check and model status
+    POST /summarize     - Non-streaming summarization
+    POST /summarize/stream - Streaming summarization (SSE)
 """
 
 import gc
 import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
-
+from pathlib import Path
+from threading import Thread
 import torch
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
-from peft import PeftModel
-from threading import Thread
-
+from transformers import TextIteratorStreamer
 import sys
-from pathlib import Path
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.logger import get_logger
+from utils.model_utils import (
+    load_finetuned_model,
+    build_simplify_prompt,
+    prepare_inputs,
+    cleanup_memory,
+    DEFAULT_MAX_NEW_TOKENS,
+)
 
-# Initialize logger
 logger = get_logger(__name__)
 
-# Global model variables
+
+# ============================================================================
+# GLOBAL STATE
+# ============================================================================
+
+# Model components (initialized on startup)
 model = None
 tokenizer = None
 device = None
 
 
+# ============================================================================
+# REQUEST/RESPONSE MODELS
+# ============================================================================
+
 class AbstractRequest(BaseModel):
-    """Request model for abstract summarization."""
+    """
+    Request model for abstract summarization.
+    
+    Attributes:
+        abstract: The scientific abstract text to simplify (10-10000 chars)
+        max_new_tokens: Maximum tokens to generate (50-2048, default 512)
+    """
     abstract: str = Field(
         ...,
         min_length=10,
@@ -44,7 +70,7 @@ class AbstractRequest(BaseModel):
         description="The scientific abstract to simplify"
     )
     max_new_tokens: int = Field(
-        default=512,
+        default=DEFAULT_MAX_NEW_TOKENS,
         ge=50,
         le=2048,
         description="Maximum number of tokens to generate"
@@ -52,63 +78,53 @@ class AbstractRequest(BaseModel):
 
 
 class SummarizationResponse(BaseModel):
-    """Response model for non-streaming summarization."""
+    """
+    Response model for non-streaming summarization.
+    
+    Attributes:
+        simplified_text: The simplified version of the abstract
+        tokens_generated: Number of tokens in the response
+    """
     simplified_text: str
     tokens_generated: int
 
 
-def load_model_sync():
-    """Load the finetuned model and tokenizer synchronously."""
-    global model, tokenizer, device
-    
-    device = "xpu" if torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
-    logger.info(f"Using device: {device}")
-    
-    logger.info("Loading base model...")
-    base_model = AutoModelForCausalLM.from_pretrained(
-        "Qwen/Qwen2.5-3B-Instruct",
-        device_map="cpu",
-        torch_dtype=torch.bfloat16,
-        trust_remote_code=True,
-    )
-    
-    logger.info("Moving model to device...")
-    base_model = base_model.to(device)
-    base_model.eval()
-    
-    logger.info("Loading LoRA adapter...")
-    model = PeftModel.from_pretrained(base_model, "model/qwen-arxiv-simplified-arc")
-    model.eval()
-    
-    logger.info("Loading tokenizer...")
-    tokenizer = AutoTokenizer.from_pretrained(
-        "model/qwen-arxiv-simplified-arc",
-        trust_remote_code=True
-    )
-    
-    logger.info("Model loaded successfully!")
-
+# ============================================================================
+# APP LIFECYCLE
+# ============================================================================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan context manager to load model on startup."""
+    """
+    Lifespan context manager for model loading/unloading.
+    
+    - Startup: Loads the finetuned model in a background thread
+    - Shutdown: Cleans up model memory
+    """
+    global model, tokenizer, device
+    
     logger.info("Starting model loading...")
-    # Load model in a separate thread to not block
+    
+    # Load model in executor to not block the event loop
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, load_model_sync)
+    model, tokenizer, device = await loop.run_in_executor(
+        None,
+        lambda: load_finetuned_model(merge_weights=True)
+    )
+    
+    logger.info("Model ready for inference")
     yield
+    
     # Cleanup on shutdown
-    global model, tokenizer
     logger.info("Shutting down and cleaning up...")
     del model, tokenizer
-    gc.collect()
-    if torch.xpu.is_available():
-        torch.xpu.empty_cache()
-    elif torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    cleanup_memory(device)
 
 
-# Create FastAPI app
+# ============================================================================
+# APP CONFIGURATION
+# ============================================================================
+
 app = FastAPI(
     title="UnArxiv API",
     description="Simplify arXiv abstracts using a fine-tuned LLM",
@@ -116,10 +132,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Static files directory
+# Static files directory for frontend
 STATIC_DIR = Path(__file__).parent / "static"
 
-# Add CORS middleware
+# Enable CORS for frontend access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -129,42 +145,40 @@ app.add_middleware(
 )
 
 
-def prepare_input(abstract: str):
-    """Prepare input for the model."""
-    messages = [
-        {
-            "role": "user",
-            "content": f"Simplify the following scientific abstract into plain language that anyone can understand. Use simple words, short sentences, and everyday analogies.\n\n{abstract}"
-        },
-    ]
-    
-    # Build text with template, then tokenize separately
-    text = tokenizer.apply_chat_template(
-        messages,
-        add_generation_prompt=True,
-        tokenize=False,
-    )
-    inputs = tokenizer(text, return_tensors="pt").to(device)
-    return inputs
-
+# ============================================================================
+# GENERATION UTILITIES
+# ============================================================================
 
 async def generate_stream(abstract: str, max_new_tokens: int) -> AsyncGenerator[str, None]:
-    """Generate streaming response using TextIteratorStreamer."""
+    """
+    Generate streaming response using TextIteratorStreamer.
+    
+    Yields SSE-formatted tokens as they are generated.
+    
+    Args:
+        abstract: The abstract to simplify
+        max_new_tokens: Maximum tokens to generate
+        
+    Yields:
+        str: SSE data events with generated tokens
+    """
     global model, tokenizer, device
     
     if model is None or tokenizer is None:
         raise HTTPException(status_code=503, detail="Model not loaded yet")
     
-    inputs = prepare_input(abstract)
+    # Prepare inputs using shared utility
+    messages = build_simplify_prompt(abstract)
+    inputs = prepare_inputs(tokenizer, messages, device)
     
-    # Create streamer
+    # Create streamer for real-time token output
     streamer = TextIteratorStreamer(
         tokenizer,
         skip_prompt=True,
         skip_special_tokens=True
     )
     
-    # Generation kwargs
+    # Configure generation
     generation_kwargs = {
         **inputs,
         "max_new_tokens": max_new_tokens,
@@ -175,9 +189,9 @@ async def generate_stream(abstract: str, max_new_tokens: int) -> AsyncGenerator[
         "streamer": streamer,
     }
     
-    # Run generation in a separate thread
+    # Run generation in background thread
     def generate():
-        with torch.no_grad():
+        with torch.inference_mode():
             model.generate(**generation_kwargs)
     
     thread = Thread(target=generate)
@@ -188,45 +202,62 @@ async def generate_stream(abstract: str, max_new_tokens: int) -> AsyncGenerator[
         for text in streamer:
             if text:
                 yield f"data: {text}\n\n"
-                await asyncio.sleep(0)  # Allow other tasks to run
+                await asyncio.sleep(0)  # Allow other async tasks
     finally:
         thread.join()
-        # Cleanup
         del inputs
-        if device == "xpu":
-            torch.xpu.synchronize()
-        gc.collect()
+        cleanup_memory(device)
     
     yield "data: [DONE]\n\n"
 
 
+# ============================================================================
+# ENDPOINTS
+# ============================================================================
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """Serve the main HTML page."""
+    """
+    Serve the main HTML page.
+    
+    Returns the frontend if available, otherwise a simple message.
+    """
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
-    return HTMLResponse(content="<h1>UnArxiv API</h1><p>Frontend not found. API is running.</p>")
+    return HTMLResponse(
+        content="<h1>UnArxiv API</h1><p>Frontend not found. API is running.</p>"
+    )
 
 
 @app.get("/api")
 async def api_info():
-    """API information endpoint."""
+    """
+    API information endpoint.
+    
+    Returns available endpoints and API metadata.
+    """
     return {
         "name": "UnArxiv API",
         "version": "1.0.0",
         "description": "Simplify arXiv abstracts using a fine-tuned LLM",
         "endpoints": {
+            "/": "GET - Web frontend",
+            "/api": "GET - This endpoint",
+            "/health": "GET - Health check",
             "/summarize": "POST - Non-streaming summarization",
             "/summarize/stream": "POST - Streaming summarization (SSE)",
-            "/health": "GET - Health check"
         }
     }
 
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """
+    Health check endpoint.
+    
+    Returns model status and device information.
+    """
     global model, tokenizer, device
     return {
         "status": "healthy" if model is not None else "loading",
@@ -239,18 +270,31 @@ async def health_check():
 async def summarize(request: AbstractRequest):
     """
     Non-streaming summarization endpoint.
-    Returns the complete simplified text.
+    
+    Takes an abstract and returns the complete simplified text.
+    
+    Args:
+        request: AbstractRequest with abstract and max_new_tokens
+        
+    Returns:
+        SummarizationResponse with simplified text and token count
     """
     global model, tokenizer, device
     
     if model is None or tokenizer is None:
-        raise HTTPException(status_code=503, detail="Model not loaded yet. Please wait and try again.")
+        raise HTTPException(
+            status_code=503,
+            detail="Model not loaded yet. Please wait and try again."
+        )
     
     try:
-        inputs = prepare_input(request.abstract)
+        # Prepare inputs using shared utility
+        messages = build_simplify_prompt(request.abstract)
+        inputs = prepare_inputs(tokenizer, messages, device)
         input_length = inputs["input_ids"].shape[1]
         
-        with torch.no_grad():
+        # Generate
+        with torch.inference_mode():
             generated_ids = model.generate(
                 **inputs,
                 max_new_tokens=request.max_new_tokens,
@@ -260,15 +304,13 @@ async def summarize(request: AbstractRequest):
                 pad_token_id=tokenizer.eos_token_id
             )
         
-        # Strip the prompt tokens
+        # Extract generated tokens (strip prompt)
         new_token_ids = generated_ids[0][input_length:]
         result = tokenizer.decode(new_token_ids, skip_special_tokens=True)
         
         # Cleanup
         del inputs, generated_ids
-        if device == "xpu":
-            torch.xpu.synchronize()
-        gc.collect()
+        cleanup_memory(device)
         
         return SummarizationResponse(
             simplified_text=result.strip(),
@@ -284,16 +326,26 @@ async def summarize(request: AbstractRequest):
 async def summarize_stream(request: AbstractRequest):
     """
     Streaming summarization endpoint using Server-Sent Events (SSE).
-    Returns tokens as they are generated.
     
-    The response is a stream of SSE events:
-    - data: <token> - Generated token
-    - data: [DONE] - Generation complete
+    Returns tokens as they are generated for real-time display.
+    
+    SSE Format:
+        data: <token>     - Generated token
+        data: [DONE]      - Generation complete
+    
+    Args:
+        request: AbstractRequest with abstract and max_new_tokens
+        
+    Returns:
+        StreamingResponse with SSE events
     """
     global model, tokenizer
     
     if model is None or tokenizer is None:
-        raise HTTPException(status_code=503, detail="Model not loaded yet. Please wait and try again.")
+        raise HTTPException(
+            status_code=503,
+            detail="Model not loaded yet. Please wait and try again."
+        )
     
     return StreamingResponse(
         generate_stream(request.abstract, request.max_new_tokens),
@@ -306,6 +358,10 @@ async def summarize_stream(request: AbstractRequest):
     )
 
 
+# ============================================================================
+# MAIN ENTRY POINT
+# ============================================================================
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
@@ -313,5 +369,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=False,
-        workers=1  # Single worker for model loading
+        workers=1  # Single worker required for shared model state
     )
