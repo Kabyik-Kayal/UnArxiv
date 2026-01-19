@@ -12,17 +12,17 @@
 
 ## Table of Contents
 
-- [The Problem](#-the-problem)
-- [How It Works](#-how-it-works)
-- [Tech Stack](#-tech-stack)
-- [Results & Metrics](#-results--metrics)
-- [Project Architecture](#-project-architecture)
-- [Project Structure](#-project-structure)
-- [Pipeline Workflow](#-pipeline-workflow)
-- [Getting Started](#-getting-started)
-- [Usage](#-usage)
-- [Configuration](#-configuration)
-- [Contributing](#-contributing)
+- [The Problem](#the-problem)
+- [How It Works](#how-it-works)
+- [Tech Stack](#tech-stack)
+- [Results & Metrics](#results--metrics)
+- [Project Architecture](#project-architecture)
+- [Project Structure](#project-structure)
+- [Pipeline Workflow](#pipeline-workflow)
+- [Getting Started](#getting-started)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Contributing](#contributing)
 ---
 
 ## The Problem
@@ -60,6 +60,8 @@ What makes this project special isn't just *what* it does, but *how* it runs. In
 | **Teacher Model** | Kimi K2 (via Groq API) |
 | **Training Framework** | Hugging Face Transformers + TRL |
 | **Dataset Source** | [arXiv Summarization Dataset](https://huggingface.co/datasets/ccdv/arxiv-summarization) |
+| **Backend API** | FastAPI + Uvicorn |
+| **Streaming** | Server-Sent Events (SSE) |
 
 ### Key Optimizations
 - **8GB VRAM Training**: Aggressive memory management with gradient accumulation and XPU-optimized settings
@@ -70,18 +72,28 @@ What makes this project special isn't just *what* it does, but *how* it runs. In
 
 ## Results & Metrics
 
-We evaluated our model against original abstracts using standard readability metrics:
+We evaluated our finetuned model against the base Qwen 2.5 3B model on 10 arXiv abstracts using ROUGE scores and readability metrics:
 
-| Metric | Original Abstract | UnArxiv Output | Improvement |
-|--------|------------------|----------------|-------------|
-| **Flesch Reading Ease** | 26.1 (Very Difficult) | **75.0 (Plain English)** | **+48.9 points** |
-| **Flesch-Kincaid Grade** | 15.5 (Graduate School) | **6.4 (6th Grade)** | **-9.1 grades** |
-| **Word Count** | 142 words | **117 words** | **17% more concise** |
+### Model Comparison
 
-> *"Imagine a crystal as a big box filled with tiny balls..."*  
-> — Actual output from UnArxiv explaining structural phase transitions.
+| Metric | Base Model | Finetuned Model | Improvement |
+|--------|------------|-----------------|-------------|
+| **ROUGE-1** | 0.301 | **0.338** | **+12.5%** |
+| **ROUGE-2** | 0.053 | **0.059** | **+11.9%** |
+| **ROUGE-L** | 0.166 | **0.176** | **+5.7%** |
+| **Flesch Reading Ease** | 62.5 (Standard) | **72.4 (Plain English)** | **+9.9 points** |
+| **Grade Level** | 9.25 (9th Grade) | **7.28 (7th Grade)** | **-2.0 grades** |
 
-The model maintains **semantic fidelity** while dramatically improving accessibility, as measured by ROUGE scores against teacher-generated references.
+### Key Findings
+
+- **Readability**: The finetuned model produces text that is nearly **2 grade levels easier** to read
+- **Content Fidelity**: Higher ROUGE scores indicate better alignment with reference simplifications
+- **Accessibility**: Outputs average at a 7th-grade reading level, accessible to a broader audience
+
+> *"Imagine you're watching tiny beads floating in a stream of water..."*  
+> — Actual output from our finetuned model explaining optical coherence tomography.
+
+The finetuned model consistently uses **everyday analogies** and **conversational language** while preserving the core scientific concepts.
 
 ---
 
@@ -185,9 +197,13 @@ The model maintains **semantic fidelity** while dramatically improving accessibi
 UnArxiv/
 ├── readme.md                       # Project documentation
 ├── requirements.txt                # Python dependencies
-├── setup.py                        # Package installation script
 ├── .env                            # Environment variables (GROQ_API_KEY)
 ├── .gitignore                      # Git ignore rules
+│
+├── api/                            # FastAPI backend & frontend serving
+│   ├── main.py                    # API entry point & endpoints
+│   └── static/                    # Frontend assets
+│       └── index.html             # Web interface
 │
 ├── data/                           # Data storage
 │   ├── selected_abstracts.json    # Sampled abstracts from arXiv
@@ -208,18 +224,21 @@ UnArxiv/
 │   ├── distillation.py            # Teacher model API calls
 │   ├── training_data.py           # Formats data for instruction tuning
 │   ├── finetuning.py              # LoRA training on Intel XPU
-│   ├── inference.py               # Model loading & generation
-│   ├── evaluate.py                # ROUGE & readability evaluation
-│   └── test_models.py             # Base vs finetuned comparison
+│   ├── generate_base_outputs.py   # Base model generation
+│   ├── generate_finetuned_outputs.py # Finetuned model generation
+│   ├── compute_metrics.py         # ROUGE & readability metrics
+│   └── test_models.py             # Quick comparison script
 │
 ├── pipelines/                      # End-to-end pipeline orchestration
 │   ├── __init__.py
-│   └── data_preparation.py        # Full data prep pipeline runner
+│   ├── data_preparation.py        # Data prep pipeline
+│   └── evaluation_pipeline.py     # Evaluation pipeline
 │
 ├── utils/                          # Shared utilities
 │   ├── __init__.py
 │   ├── logger.py                  # Centralized logging configuration
 │   ├── custom_exception.py        # Enhanced error handling
+│   ├── model_utils.py             # Shared model loading & generation logic
 │   └── save_abstracts.py          # JSON serialization helpers
 │
 └── logs/                           # Runtime log files
@@ -235,10 +254,13 @@ UnArxiv/
 | **`steps/distillation.py`** | Calls Groq API with Kimi K2 to generate simplified versions |
 | **`steps/training_data.py`** | Creates instruction-format JSON for finetuning |
 | **`steps/finetuning.py`** | LoRA training with Intel XPU optimizations |
-| **`steps/inference.py`** | Loads finetuned model and generates simplifications |
-| **`steps/evaluate.py`** | Computes ROUGE scores and readability metrics |
-| **`steps/test_models.py`** | Side-by-side comparison of base vs finetuned outputs |
+| **`steps/generate_base_outputs.py`** | Generates outputs from the base Qwen 2.5 3B model |
+| **`steps/generate_finetuned_outputs.py`** | Generates outputs from the finetuned model |
+| **`steps/compute_metrics.py`** | Computes ROUGE scores and readability metrics |
 | **`pipelines/data_preparation.py`** | Orchestrates the entire data preparation workflow |
+| **`pipelines/evaluation_pipeline.py`** | Runs generation and metrics computation in isolated processes |
+| **`api/main.py`** | FastAPI backend for streaming inference and serving the web UI |
+| **`utils/model_utils.py`** | Shared logic for device management, model loading, and text generation |
 ---
 
 ## Pipeline Workflow
@@ -249,7 +271,7 @@ The project follows a modular, reproducible pipeline:
 
 ```bash
 # Run the complete data preparation pipeline
-python pipelines/data_preparation.py
+python -m pipelines.data_preparation
 ```
 
 This executes:
@@ -263,7 +285,7 @@ This executes:
 
 ```bash
 # Run LoRA finetuning on Intel Arc GPU
-python steps/finetuning.py
+python -m steps.finetuning
 ```
 
 Training configuration:
@@ -276,15 +298,16 @@ Training configuration:
 ### Phase 3: Evaluation & Inference
 
 ```bash
-# Evaluate model performance
-python steps/evaluate.py --test-size 50
+# Run the complete evaluation pipeline (Generation + Metrics)
+python -m pipelines.evaluation_pipeline --test-size 17
 
-# Run inference on a sample abstract
-python steps/inference.py
-
-# Compare base model vs finetuned
-python steps/test_models.py
+# Run specific parts
+python -m pipelines.evaluation_pipeline --base-only
+python -m pipelines.evaluation_pipeline --finetuned-only
+python -m pipelines.evaluation_pipeline --metrics-only
 ```
+
+The evaluation pipeline runs each step (base generation, finetuned generation, metric computation) as a separate subprocess to ensure efficient memory management on Intel Arc GPUs.
 
 ---
 
@@ -330,7 +353,18 @@ print(torch.xpu.device_count())  # Should print: 1 (or more)
 
 ## Usage
 
-### Quick Inference
+### Web Interface (Recommended)
+
+The easiest way to use UnArxiv is via the web interface, which provides real-time streaming simplifications.
+
+```bash
+# Start the API server
+python -m api.main
+```
+
+Then open your browser to: **http://localhost:8000**
+
+### Quick Inference (Python)
 
 ```python
 from steps.inference import load_model, simplify_arxiv
@@ -352,13 +386,13 @@ print(simplified)
 
 ```bash
 # Run inference with built-in test case
-python steps/inference.py
+python -m steps.inference
 
-# Evaluate on N random samples
-python steps/evaluate.py --test-size 100
+# Run the complete evaluation pipeline
+python -m pipelines.evaluation_pipeline --test-size 17
 
-# Compare base vs finetuned model
-python steps/test_models.py
+# Compare base vs finetuned model (quick test)
+python -m steps.test_models
 ```
 
 ## Configuration
@@ -411,7 +445,7 @@ Contributions are welcome! Here are some ways to help:
 pip install -e .
 
 # Run tests
-python steps/test_models.py
+python -m steps.test_models
 ```
 
 ---
