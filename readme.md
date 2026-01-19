@@ -359,7 +359,7 @@ The easiest way to use UnArxiv is via the web interface, which provides real-tim
 
 ```bash
 # Start the API server
-python -m api.main
+python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
 Then open your browser to: **http://localhost:8000**
