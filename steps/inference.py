@@ -2,140 +2,77 @@
 Inference script for the UnArxiv finetuned model.
 Generates simplified explanations of arXiv abstracts.
 
-NOTE: Model is loaded inside main() to avoid module-level initialization issues.
+This script demonstrates standalone inference using the shared model utilities.
+For API-based inference, see api/main.py.
 """
 
-import gc
-import torch
-from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from peft import PeftModel
 import sys
+import time
+from tqdm import tqdm
 from utils.logger import get_logger
 from utils.custom_exception import CustomException
+from utils.model_utils import (
+    load_finetuned_model,
+    generate_simplification,
+    get_device,
+)
 
-# Initialize logger
 logger = get_logger(__name__)
 
-# Track inference count for periodic cleanup
-_inference_count = 0
-
-
-def load_model():
-    """Load the finetuned model and tokenizer."""
-    device = "xpu" if torch.xpu.is_available() else "cpu"
-    logger.info(f"Using device: {device}")
+def load_model_with_progress():
+    """
+    Load the finetuned model with a progress bar.
     
-    # Clear XPU cache
-    if device == "xpu":
-        try:
-            torch.xpu.empty_cache()
-            logger.info("XPU cache cleared")
-        except:
-            pass
+    Wraps the shared load_finetuned_model with tqdm progress display.
     
-    # Loading steps with progress
-    steps = ["Loading base model", "Moving to device", "Loading LoRA adapter", "Loading tokenizer"]
+    Returns:
+        tuple: (model, tokenizer, device)
+    """
+    device = get_device()
+    
+    steps = ["Loading base model", "Moving to XPU", "Merging LoRA", "Loading tokenizer"]
     pbar = tqdm(steps, desc="Loading model", unit="step")
     
-    # Step 1: Load base model
-    pbar.set_description("Loading base model")
-    base_model = AutoModelForCausalLM.from_pretrained(
-        "Qwen/Qwen2.5-3B-Instruct",
-        device_map="cpu",
-        torch_dtype=torch.bfloat16,
-        trust_remote_code=True,
-    )
-    pbar.update(1)
+    # Load model (progress bar is for visual feedback only)
+    pbar.set_description("Loading model")
+    model, tokenizer, device = load_finetuned_model(device=device, merge_weights=True)
     
-    # Step 2: Move to device
-    pbar.set_description("Moving to device")
-    base_model = base_model.to(device)
-    base_model.eval()
-    pbar.update(1)
-    
-    # Step 3: Load LoRA adapter
-    pbar.set_description("Loading LoRA adapter")
-    model = PeftModel.from_pretrained(base_model, "model/qwen-arxiv-simplified-arc")
-    model.eval()
-    pbar.update(1)
-    
-    # Step 4: Load tokenizer
-    pbar.set_description("Loading tokenizer")
-    tokenizer = AutoTokenizer.from_pretrained(
-        "model/qwen-arxiv-simplified-arc",
-        trust_remote_code=True
-    )
-    pbar.update(1)
+    # Update progress to complete
+    for _ in range(4):
+        pbar.update(1)
     pbar.close()
     
     return model, tokenizer, device
 
 
-def simplify_arxiv(model, tokenizer, device, abstract):
-    """Generate a simplified explanation of an arXiv abstract."""
-    messages = [
-        {"role": "user", "content": f"Simplify the following scientific abstract into plain language that anyone can understand. Use simple words, short sentences, and everyday analogies.\n\n{abstract}"},
-    ]
-    
-    inputs = tokenizer.apply_chat_template(
-        messages,
-        add_generation_prompt=True,
-        tokenize=True,
-        return_dict=True,
-        return_tensors="pt",
-    ).to(device)
-    
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=512,
-            do_sample=False,
-            temperature=None,
-            top_p=None,
-            top_k=None,
-            eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id
-        )
-    
-    # Decode only the generated portion (exclude input prompt)
-    result = tokenizer.decode(outputs[0][inputs["input_ids"].shape[-1]:], skip_special_tokens=True)
-    
-    # Clean up tensors
-    del inputs
-    del outputs
-    
-    # Periodic memory cleanup every 5 samples
-    global _inference_count
-    _inference_count += 1
-    if _inference_count % 5 == 0:
-        # Clear KV cache if available
-        if hasattr(model, '_clear_kv_cache'):
-            model._clear_kv_cache()
-        elif hasattr(model, 'model') and hasattr(model.model, '_clear_kv_cache'):
-            model.model._clear_kv_cache()
-        gc.collect()
-        if device == "xpu":
-            torch.xpu.synchronize()
-            torch.xpu.empty_cache()
-        logger.info(f"Memory cleanup (including KV cache) after {_inference_count} samples")
-    
-    return result.strip()
-
-
 def main():
-    """Main function - matches test_models.py structure."""
+    """
+    Main function for testing inference.
+    
+    Loads the model and runs inference on a sample abstract,
+    displaying the result and timing information.
+    """
     try:
-        model, tokenizer, device = load_model()
+        model, tokenizer, device = load_model_with_progress()
         
         logger.info("Starting inference test...")
+        
+        # Sample abstract for testing
         test_abstract = """The relationship between computing systems and the brain has served as motivation for pioneering theoreticians since John von Neumann and Alan Turing. Uniform, scale-free biological networks, such as the brain, have powerful properties, including generalizing over time, which is the main barrier for Machine Learning on the path to Universal Reasoning Models. We introduce `Dragon Hatchling' (BDH), a new Large Language Model architecture based on a scale-free biologically inspired network of $n$ locally-interacting neuron particles. BDH couples strong theoretical foundations and inherent interpretability without sacrificing Transformer-like performance. BDH is a practical, performant state-of-the-art attention-based state space sequence learning architecture. In addition to being a graph model, BDH admits a GPU-friendly formulation. It exhibits Transformer-like scaling laws: empirically BDH rivals GPT2 performance on language and translation tasks, at the same number of parameters (10M to 1B), for the same training data. BDH can be represented as a brain model. The working memory of BDH during inference entirely relies on synaptic plasticity with Hebbian learning using spiking neurons. We confirm empirically that specific, individual synapses strengthen connection whenever BDH hears or reasons about a specific concept while processing language inputs. The neuron interaction network of BDH is a graph of high modularity with heavy-tailed degree distribution. The BDH model is biologically plausible, explaining one possible mechanism which human neurons could use to achieve speech. BDH is designed for interpretability. Activation vectors of BDH are sparse and positive. We demonstrate monosemanticity in BDH on language tasks. Interpretability of state, which goes beyond interpretability of neurons and model parameters, is an inherent feature of the BDH architecture."""
-        result = simplify_arxiv(model, tokenizer, device, test_abstract)
+        
+        # Run inference with timing
+        start_time = time.time()
+        result = generate_simplification(model, tokenizer, device, test_abstract)
+        end_time = time.time()
+        
+        # Display results
+        print(f"Total inference time: {end_time - start_time:.4f} seconds")
         print("\n" + "="*80)
         print("SIMPLIFIED EXPLANATION:")
         print("="*80)
         print(result)
         print("="*80 + "\n")
+        
         logger.info("Inference test completed successfully")
         
     except Exception as e:
