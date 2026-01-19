@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,24 +8,29 @@
     <meta name="description" content="Transform complex arXiv abstracts into plain language anyone can understand">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22black%22><path d=%22M6 2v14a6 6 0 0 0 6 6 6 6 0 0 0 6-6V2h-4v14a2 2 0 0 1-2 2 2 2 0 0 1-2-2V2H6z%22/></svg>">
     <style>
         :root {
-            --bg-primary: #0a0a0f;
-            --bg-secondary: #12121a;
-            --bg-tertiary: #1a1a25;
-            --bg-card: linear-gradient(135deg, #15151f 0%, #1a1a28 100%);
-            --border-color: rgba(255, 255, 255, 0.08);
-            --border-glow: rgba(139, 92, 246, 0.3);
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --text-muted: #64748b;
-            --accent-primary: #8b5cf6;
-            --accent-secondary: #a78bfa;
-            --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
-            --success: #10b981;
-            --error: #ef4444;
-            --shadow-glow: 0 0 40px rgba(139, 92, 246, 0.15);
+            --bg-primary: #f5f5f0;
+            --bg-secondary: #ffffff;
+            --bg-chat: #fafaf8;
+            --border-main: #1a1a1a;
+            --border-thick: 3px;
+            --border-thin: 2px;
+            --text-primary: #1a1a1a;
+            --text-secondary: #4a4a4a;
+            --text-muted: #8a8a8a;
+            --accent-primary: #1a1a1a;
+            --accent-hover: #333333;
+            --success: #2d5a27;
+            --error: #c73030;
+            --shadow-brutal: 4px 4px 0px #1a1a1a;
+            --shadow-brutal-hover: 6px 6px 0px #1a1a1a;
+            --radius: 0px;
         }
 
         * {
@@ -34,111 +40,133 @@
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg-primary);
             color: var(--text-primary);
             min-height: 100vh;
             line-height: 1.6;
-            overflow-x: hidden;
         }
 
-        /* Animated background */
-        .bg-gradient {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: 
-                radial-gradient(ellipse at 20% 20%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 80%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
-                radial-gradient(ellipse at 50% 50%, rgba(139, 92, 246, 0.03) 0%, transparent 70%);
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 2rem;
-            position: relative;
-            z-index: 1;
+        /* Main Layout */
+        .app-container {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            flex-direction: column;
         }
 
         /* Header */
-        header {
-            text-align: center;
-            padding: 3rem 0;
-            margin-bottom: 2rem;
+        .app-header {
+            padding: 1rem 2rem;
+            background: var(--bg-secondary);
+            border-bottom: var(--border-thick) solid var(--border-main);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
         }
 
         .logo {
-            display: inline-flex;
+            display: flex;
             align-items: center;
             gap: 0.75rem;
-            margin-bottom: 1.5rem;
         }
 
         .logo-icon {
-            width: 48px;
-            height: 48px;
-            background: var(--accent-gradient);
-            border-radius: 12px;
+            width: 40px;
+            height: 40px;
+            background: var(--accent-primary);
+            border: var(--border-thick) solid var(--border-main);
             display: flex;
             align-items: center;
             justify-content: center;
+            color: var(--bg-secondary);
+            box-shadow: var(--shadow-brutal);
+        }
+
+        .logo-icon svg {
+            width: 22px;
+            height: 22px;
+            fill: currentColor;
+        }
+
+        .logo h1 {
             font-size: 1.5rem;
-            box-shadow: var(--shadow-glow);
-        }
-
-        h1 {
-            font-size: 2.5rem;
             font-weight: 700;
-            background: var(--accent-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            letter-spacing: -0.5px;
         }
 
-        .tagline {
-            color: var(--text-secondary);
-            font-size: 1.1rem;
-            font-weight: 400;
-            max-width: 500px;
-            margin: 0 auto;
+        .model-badge {
+            padding: 0.3rem 0.6rem;
+            background: var(--bg-primary);
+            border: var(--border-thin) solid var(--border-main);
+            font-size: 0.75rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
         }
 
-        /* Status indicator */
-        .status-bar {
+        .header-actions {
             display: flex;
             align-items: center;
-            justify-content: center;
+            gap: 1rem;
+        }
+
+        .new-chat-btn {
+            padding: 0.6rem 1rem;
+            background: var(--bg-secondary);
+            border: var(--border-thin) solid var(--border-main);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
             gap: 0.5rem;
-            padding: 0.75rem 1.25rem;
-            background: var(--bg-tertiary);
-            border-radius: 50px;
-            font-size: 0.85rem;
-            margin: 1.5rem auto;
-            width: fit-content;
-            border: 1px solid var(--border-color);
+            transition: all 0.15s ease;
+            box-shadow: 3px 3px 0px var(--border-main);
+        }
+
+        .new-chat-btn:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 4px 4px 0px var(--border-main);
+        }
+
+        .new-chat-btn:active {
+            transform: translate(1px, 1px);
+            box-shadow: 2px 2px 0px var(--border-main);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-primary);
+            border: var(--border-thin) solid var(--border-main);
+            font-size: 0.8rem;
         }
 
         .status-dot {
             width: 8px;
             height: 8px;
-            border-radius: 50%;
             background: var(--text-muted);
+            border: 1px solid var(--border-main);
             transition: all 0.3s ease;
         }
 
         .status-dot.loading {
-            background: #f59e0b;
+            background: #e6a700;
             animation: pulse 1.5s infinite;
         }
 
         .status-dot.ready {
             background: var(--success);
-            box-shadow: 0 0 10px var(--success);
         }
 
         .status-dot.error {
@@ -146,84 +174,347 @@
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.2); }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
         }
 
-        /* Main card */
-        .main-card {
-            background: var(--bg-card);
-            border-radius: 24px;
-            border: 1px solid var(--border-color);
+        /* Main Content Area */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Chat Area */
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
             padding: 2rem;
-            box-shadow: var(--shadow-glow);
-            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
         }
 
-        /* Input section */
-        .input-section {
-            margin-bottom: 1.5rem;
+        .welcome-message {
+            max-width: 700px;
+            margin: auto;
+            text-align: center;
+            padding: 3rem 2rem;
         }
 
-        label {
-            display: block;
-            font-size: 0.9rem;
-            font-weight: 500;
-            color: var(--text-secondary);
+        .welcome-icon {
+            width: 80px;
+            height: 80px;
+            background: var(--bg-secondary);
+            border: var(--border-thick) solid var(--border-main);
+            box-shadow: var(--shadow-brutal);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            margin: 0 auto 1.5rem;
+        }
+
+        .welcome-icon svg {
+            width: 40px;
+            height: 40px;
+            fill: var(--text-primary);
+        }
+
+        .welcome-message h2 {
+            font-size: 1.75rem;
+            font-weight: 700;
             margin-bottom: 0.75rem;
         }
 
-        textarea {
-            width: 100%;
-            min-height: 200px;
-            padding: 1.25rem;
+        .welcome-message p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            line-height: 1.7;
+        }
+
+        .example-cards {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .example-card {
+            padding: 1rem;
             background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
+            border: var(--border-thin) solid var(--border-main);
+            box-shadow: 3px 3px 0px var(--border-main);
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .example-card:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 5px 5px 0px var(--border-main);
+        }
+
+        .example-card-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .example-card-text {
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+
+        /* Chat Messages */
+        .message {
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .message-user {
+            display: flex;
+            gap: 1rem;
+            padding: 1.5rem;
+            background: var(--bg-secondary);
+            border: var(--border-thick) solid var(--border-main);
+            box-shadow: var(--shadow-brutal);
+        }
+
+        .message-assistant {
+            display: flex;
+            gap: 1rem;
+            padding: 1.5rem;
+            background: var(--bg-chat);
+            border: var(--border-thin) solid var(--border-main);
+        }
+
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            background: var(--bg-primary);
+            border: var(--border-thin) solid var(--border-main);
+        }
+
+        .message-avatar.assistant {
+            background: var(--accent-primary);
+            color: white;
+        }
+
+        .message-content {
+            flex: 1;
+            font-size: 1rem;
+            line-height: 1.8;
+        }
+
+        .message-content .label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .typing-cursor {
+            display: inline-block;
+            width: 3px;
+            height: 1.1em;
+            background: var(--accent-primary);
+            margin-left: 2px;
+            animation: blink 0.7s infinite;
+            vertical-align: text-bottom;
+        }
+
+        @keyframes blink {
+
+            0%,
+            50% {
+                opacity: 1;
+            }
+
+            51%,
+            100% {
+                opacity: 0;
+            }
+        }
+
+        .message-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px dashed var(--border-main);
+        }
+
+        .action-btn {
+            padding: 0.4rem 0.75rem;
+            background: var(--bg-secondary);
+            border: var(--border-thin) solid var(--border-main);
+            font-size: 0.8rem;
+            font-family: inherit;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            transition: all 0.1s ease;
+        }
+
+        .action-btn:hover {
+            background: var(--bg-primary);
+        }
+
+        /* Stats Display */
+        .generation-stats {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px dashed var(--border-main);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .stat-item span {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* Input Area */
+        .input-area {
+            padding: 1.5rem 2rem 2rem;
+            background: var(--bg-secondary);
+            border-top: var(--border-thick) solid var(--border-main);
+        }
+
+        .input-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .input-wrapper {
+            background: var(--bg-secondary);
+            border: var(--border-thick) solid var(--border-main);
+            box-shadow: var(--shadow-brutal);
+            transition: all 0.15s ease;
+        }
+
+        .input-wrapper:focus-within {
+            transform: translate(-2px, -2px);
+            box-shadow: var(--shadow-brutal-hover);
+        }
+
+        .input-main {
+            display: flex;
+            align-items: flex-end;
+        }
+
+        textarea {
+            flex: 1;
+            padding: 1rem 1.25rem;
+            background: transparent;
+            border: none;
             color: var(--text-primary);
             font-family: inherit;
-            font-size: 0.95rem;
-            line-height: 1.7;
-            resize: vertical;
-            transition: all 0.3s ease;
+            font-size: 1rem;
+            line-height: 1.6;
+            resize: none;
+            min-height: 56px;
+            max-height: 200px;
         }
 
         textarea:focus {
             outline: none;
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
         }
 
         textarea::placeholder {
             color: var(--text-muted);
         }
 
-        /* Controls */
-        .controls {
+        .send-btn {
+            padding: 0.875rem 1.25rem;
+            background: var(--accent-primary);
+            border: none;
+            border-left: var(--border-thick) solid var(--border-main);
+            color: white;
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .send-btn:hover:not(:disabled) {
+            background: var(--accent-hover);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .send-btn .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .input-footer {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
+            padding: 0.75rem 1.25rem;
+            border-top: var(--border-thin) solid var(--border-main);
+            background: var(--bg-primary);
         }
 
         .token-control {
             display: flex;
             align-items: center;
             gap: 0.75rem;
+            font-size: 0.85rem;
         }
 
         .token-control label {
-            margin: 0;
-            white-space: nowrap;
+            color: var(--text-secondary);
+            font-weight: 500;
         }
 
         input[type="range"] {
-            width: 120px;
-            height: 6px;
+            width: 100px;
+            height: 8px;
             background: var(--bg-secondary);
-            border-radius: 3px;
+            border: var(--border-thin) solid var(--border-main);
             -webkit-appearance: none;
             cursor: pointer;
         }
@@ -232,262 +523,158 @@
             -webkit-appearance: none;
             width: 18px;
             height: 18px;
-            background: var(--accent-gradient);
-            border-radius: 50%;
+            background: var(--accent-primary);
+            border: var(--border-thin) solid var(--border-main);
             cursor: pointer;
-            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
         }
 
         .token-value {
+            font-family: 'JetBrains Mono', monospace;
             font-weight: 600;
-            color: var(--accent-secondary);
-            min-width: 50px;
+            min-width: 40px;
         }
 
-        /* Button */
-        .btn-primary {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.875rem 2rem;
-            background: var(--accent-gradient);
-            color: white;
-            font-weight: 600;
-            font-size: 0.95rem;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 30px rgba(139, 92, 246, 0.4);
-        }
-
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .btn-primary .spinner {
-            width: 18px;
-            height: 18px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Output section */
-        .output-section {
-            display: none;
-            margin-top: 2rem;
-            padding-top: 2rem;
-            border-top: 1px solid var(--border-color);
-        }
-
-        .output-section.visible {
-            display: block;
-            animation: fadeIn 0.4s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .output-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 1rem;
-        }
-
-        .output-header h3 {
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--text-primary);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .output-header .icon {
-            font-size: 1.2rem;
-        }
-
-        .copy-btn {
-            padding: 0.5rem 1rem;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .copy-btn:hover {
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-            border-color: var(--accent-primary);
-        }
-
-        .output-content {
-            background: var(--bg-secondary);
-            border-radius: 16px;
-            padding: 1.5rem;
-            min-height: 150px;
-            font-size: 1rem;
-            line-height: 1.8;
-            color: var(--text-primary);
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-
-        .output-content .cursor {
-            display: inline-block;
-            width: 2px;
-            height: 1.2em;
-            background: var(--accent-primary);
-            margin-left: 2px;
-            animation: blink 0.8s infinite;
-            vertical-align: text-bottom;
-        }
-
-        @keyframes blink {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0; }
-        }
-
-        /* Stats */
-        .stats {
-            display: flex;
-            gap: 1.5rem;
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--border-color);
-        }
-
-        .stat {
-            font-size: 0.85rem;
+        .input-hint {
+            font-size: 0.8rem;
             color: var(--text-muted);
-        }
-
-        .stat span {
-            color: var(--accent-secondary);
-            font-weight: 600;
-        }
-
-        /* Footer */
-        footer {
-            text-align: center;
-            padding: 3rem 0;
-            color: var(--text-muted);
-            font-size: 0.85rem;
-        }
-
-        footer a {
-            color: var(--accent-secondary);
-            text-decoration: none;
-        }
-
-        footer a:hover {
-            text-decoration: underline;
+            font-family: 'JetBrains Mono', monospace;
         }
 
         /* Responsive */
-        @media (max-width: 640px) {
-            .container {
+        @media (max-width: 900px) {
+            .app-header {
                 padding: 1rem;
             }
+        }
 
-            h1 {
-                font-size: 1.75rem;
-            }
-
-            .main-card {
-                padding: 1.25rem;
-                border-radius: 16px;
-            }
-
-            .controls {
+        @media (max-width: 640px) {
+            .app-header {
                 flex-direction: column;
+                gap: 1rem;
                 align-items: stretch;
             }
 
-            .btn-primary {
-                width: 100%;
-                justify-content: center;
+            .header-left {
+                justify-content: space-between;
             }
 
-            .stats {
+            .header-actions {
+                justify-content: space-between;
+            }
+
+            .chat-container {
+                padding: 1rem;
+            }
+
+            .input-area {
+                padding: 1rem;
+            }
+
+            .message-user,
+            .message-assistant {
+                padding: 1rem;
+            }
+
+            .welcome-message {
+                padding: 2rem 1rem;
+            }
+
+            .example-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .input-footer {
                 flex-direction: column;
-                gap: 0.5rem;
+                gap: 0.75rem;
+                align-items: flex-start;
             }
         }
     </style>
 </head>
+
 <body>
-    <div class="bg-gradient"></div>
-    
-    <div class="container">
-        <header>
-            <div class="logo">
-                <div class="logo-icon">📚</div>
-                <h1>UnArxiv</h1>
+    <div class="app-container">
+        <!-- New Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M6 2v14a6 6 0 0 0 6 6 6 6 0 0 0 6-6V2h-4v14a2 2 0 0 1-2 2 2 2 0 0 1-2-2V2H6z" />
+                        </svg>
+                    </div>
+                    <h1>UnArxiv</h1>
+                </div>
+                <span class="model-badge">Qwen2.5-3B</span>
             </div>
-            <p class="tagline">Transform complex scientific abstracts into plain language that anyone can understand</p>
-            
-            <div class="status-bar">
-                <div class="status-dot" id="statusDot"></div>
-                <span id="statusText">Checking model status...</span>
+
+            <div class="header-actions">
+                <div class="status-indicator">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">Checking status...</span>
+                </div>
+                <button class="new-chat-btn" id="newChatBtn">
+                    <span>+</span> New
+                </button>
             </div>
         </header>
 
-        <main class="main-card">
-            <div class="input-section">
-                <label for="abstract">Paste your scientific abstract</label>
-                <textarea 
-                    id="abstract" 
-                    placeholder="Paste an arXiv abstract here... For example:
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="chat-container" id="chatContainer">
+                <div class="welcome-message" id="welcomeMessage">
+                    <div class="welcome-icon">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M6 2v14a6 6 0 0 0 6 6 6 6 0 0 0 6-6V2h-4v14a2 2 0 0 1-2 2 2 2 0 0 1-2-2V2H6z" />
+                        </svg>
+                    </div>
+                    <h2>Simplify Any Scientific Abstract</h2>
+                    <p>Paste a complex arXiv abstract and get a clear, plain-language explanation. Powered by a
+                        fine-tuned language model.</p>
 
-The relationship between computing systems and the brain has served as motivation for pioneering theoreticians since John von Neumann and Alan Turing. Uniform, scale-free biological networks, such as the brain, have powerful properties, including generalizing over time..."
-                ></textarea>
+                    <div class="example-cards">
+                        <div class="example-card" data-example="neural">
+                            <div class="example-card-title">Computer Science</div>
+                            <div class="example-card-text">Parallel Batch-Dynamic Trees (UFO Trees)</div>
+                        </div>
+                        <div class="example-card" data-example="quantum">
+                            <div class="example-card-title">Quantum Physics</div>
+                            <div class="example-card-text">Jordan-Wigner Fermion Clusters</div>
+                        </div>
+                        <div class="example-card" data-example="ml">
+                            <div class="example-card-title">Machine Learning</div>
+                            <div class="example-card-text">Transformer: Attention Is All You Need</div>
+                        </div>
+                        <div class="example-card" data-example="physics">
+                            <div class="example-card-title">High Energy Physics</div>
+                            <div class="example-card-text">Higgs Boson Invisible Decays</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <div class="controls">
-                <div class="token-control">
-                    <label for="maxTokens">Max tokens:</label>
-                    <input type="range" id="maxTokens" min="100" max="1024" value="512" step="50">
-                    <span class="token-value" id="tokenValue">512</span>
+            <div class="input-area">
+                <div class="input-container">
+                    <div class="input-wrapper">
+                        <div class="input-main">
+                            <textarea id="abstract" rows="1"
+                                placeholder="Paste a scientific abstract here..."></textarea>
+                            <button class="send-btn" id="simplifyBtn" disabled>
+                                <span class="btn-icon">→</span>
+                            </button>
+                        </div>
+                        <div class="input-footer">
+                            <div class="token-control">
+                                <label for="maxTokens">Max tokens:</label>
+                                <input type="range" id="maxTokens" min="100" max="1024" value="512" step="50">
+                                <span class="token-value" id="tokenValue">512</span>
+                            </div>
+                            <span class="input-hint">Ctrl + Enter to send</span>
+                        </div>
+                    </div>
                 </div>
-                <button class="btn-primary" id="simplifyBtn" disabled>
-                    <span class="btn-text">✨ Simplify</span>
-                </button>
-            </div>
-
-            <div class="output-section" id="outputSection">
-                <div class="output-header">
-                    <h3><span class="icon">💡</span> Simplified Explanation</h3>
-                    <button class="copy-btn" id="copyBtn">📋 Copy</button>
-                </div>
-                <div class="output-content" id="outputContent"></div>
-                <div class="stats" id="stats"></div>
             </div>
         </main>
-
-        <footer>
-            <p>Powered by fine-tuned <a href="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct" target="_blank">Qwen2.5-3B</a> • 
-            <a href="https://github.com" target="_blank">GitHub</a></p>
-        </footer>
     </div>
 
     <script>
@@ -495,16 +682,21 @@ The relationship between computing systems and the brain has served as motivatio
         const maxTokensSlider = document.getElementById('maxTokens');
         const tokenValue = document.getElementById('tokenValue');
         const simplifyBtn = document.getElementById('simplifyBtn');
-        const outputSection = document.getElementById('outputSection');
-        const outputContent = document.getElementById('outputContent');
-        const statsDiv = document.getElementById('stats');
-        const copyBtn = document.getElementById('copyBtn');
+        const chatContainer = document.getElementById('chatContainer');
+        const welcomeMessage = document.getElementById('welcomeMessage');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
+        const newChatBtn = document.getElementById('newChatBtn');
 
         let isGenerating = false;
         let generatedText = '';
         let startTime = 0;
+
+        // Auto-resize textarea
+        abstractInput.addEventListener('input', () => {
+            abstractInput.style.height = 'auto';
+            abstractInput.style.height = Math.min(abstractInput.scrollHeight, 200) + 'px';
+        });
 
         // Update token value display
         maxTokensSlider.addEventListener('input', () => {
@@ -516,36 +708,93 @@ The relationship between computing systems and the brain has served as motivatio
             try {
                 const response = await fetch('/health');
                 const data = await response.json();
-                
+
                 if (data.model_loaded) {
                     statusDot.className = 'status-dot ready';
-                    statusText.textContent = `Model ready (${data.device})`;
+                    statusText.textContent = `Ready • ${data.device}`;
                     simplifyBtn.disabled = false;
                 } else {
                     statusDot.className = 'status-dot loading';
                     statusText.textContent = 'Loading model...';
                     simplifyBtn.disabled = true;
-                    // Check again in 5 seconds
                     setTimeout(checkHealth, 5000);
                 }
             } catch (error) {
                 statusDot.className = 'status-dot error';
                 statusText.textContent = 'API unavailable';
                 simplifyBtn.disabled = true;
-                // Retry in 10 seconds
                 setTimeout(checkHealth, 10000);
             }
         }
 
-        // Initial health check
         checkHealth();
 
-        // Simplify button handler
+        // New chat button
+        newChatBtn.addEventListener('click', () => {
+            // Restore welcome message and clear chat
+            chatContainer.innerHTML = '';
+            chatContainer.appendChild(welcomeMessage);
+            welcomeMessage.style.display = 'block';
+            abstractInput.value = '';
+            abstractInput.style.height = 'auto';
+            abstractInput.focus();
+        });
+
+        // Example cards
+        const examples = {
+            neural: `The dynamic trees problem is to maintain a tree under edge updates while supporting queries like connectivity queries or path queries. Despite the first data structure for this fundamental problem -- the link-cut tree -- being invented 40 years ago, our experiments reveal that they are still the fastest sequential data structure for the problem. However, link-cut trees cannot support parallel batch-dynamic updates and have limitations on the kinds of queries they support. In this paper, we design a new parallel batch-dynamic trees data structure called UFO trees that simultaneously supports a wide range of query functionality, supports work-efficient parallel batch-dynamic updates, and is competitive with link-cut trees when run sequentially. We prove that a key reason for the strong practical performance of both link-cut trees and UFO trees is that they can perform updates and queries in sub-logarithmic time for low-diameter trees. We perform an experimental study of our optimized C++ implementations of UFO trees with ten other dynamic tree implementations, several of which are new, in a broad benchmark of both synthetic and real-world trees of varying diameter and size. Our results show that, in both sequential and parallel settings, UFO trees are the fastest dynamic tree data structure that supports a wide range of queries. Our new implementation of UFO trees has low space usage and easily scales to billion-size inputs, making it a promising building block for implementing more complex dynamic graph algorithms in practice.`,
+            quantum: `We investigate the Jordan-Wigner fermion clusters with the stationary distributed pairwise quantum discord. Such clusters appear after the Jordan-Wigner transformation of a spin chain governed by the nearest-neighbor XY-Hamiltonian with the particular initial state having one polarized node. We show that the quantum discord stationarity in such systems is not destroyed by the "parasitic" polarization of at least two types.`,
+            ml: `The dominant sequence transduction models are based on complex recurrent or convolutional neural networks in an encoder-decoder configuration. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-to-German translation task, improving over the existing best results, including ensembles by over 2 BLEU. On the WMT 2014 English-to-French translation task, our model establishes a new single-model state-of-the-art BLEU score of 41.8 after training for 3.5 days on eight GPUs, a small fraction of the training costs of the best models from the literature. We show that the Transformer generalizes well to other tasks by applying it successfully to English constituency parsing both with large and limited training data.`,
+            physics: `Given its weak coupling to bottom quarks and tau leptons, the Higgs boson may predominantly decay into invisible particles like gravitinos, neutralinos, or gravitons. We consider the manifestation of such an invisibly decaying Higgs boson in weak boson fusion at the CERN LHC. Distinctive kinematic distributions of the two quark jets of the signal allow to restrict the Higgs branching ratio to invisible final states.`
+        };
+
+        document.querySelectorAll('.example-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const key = card.dataset.example;
+                abstractInput.value = examples[key];
+                abstractInput.style.height = 'auto';
+                abstractInput.style.height = Math.min(abstractInput.scrollHeight, 200) + 'px';
+                abstractInput.focus();
+            });
+        });
+
+        // Create message elements
+        function createUserMessage(text) {
+            const div = document.createElement('div');
+            div.className = 'message message-user';
+            div.innerHTML = `
+                <div class="message-avatar">👤</div>
+                <div class="message-content">
+                    <div class="label">Abstract</div>
+                    ${text}
+                </div>
+            `;
+            return div;
+        }
+
+        function createAssistantMessage() {
+            const div = document.createElement('div');
+            div.className = 'message message-assistant';
+            div.innerHTML = `
+                <div class="message-avatar assistant">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white">
+                        <path d="M6 2v14a6 6 0 0 0 6 6 6 6 0 0 0 6-6V2h-4v14a2 2 0 0 1-2 2 2 2 0 0 1-2-2V2H6z"/>
+                    </svg>
+                </div>
+                <div class="message-content">
+                    <div class="label">Simplified Explanation</div>
+                    <div class="response-text"></div>
+                </div>
+            `;
+            return div;
+        }
+
+        // Simplify handler
         simplifyBtn.addEventListener('click', async () => {
             const abstract = abstractInput.value.trim();
-            
+
             if (!abstract) {
-                alert('Please enter an abstract to simplify');
+                abstractInput.focus();
                 return;
             }
 
@@ -555,19 +804,33 @@ The relationship between computing systems and the brain has served as motivatio
             generatedText = '';
             startTime = Date.now();
 
-            // Update UI
-            simplifyBtn.innerHTML = '<div class="spinner"></div><span class="btn-text">Generating...</span>';
+            // Hide welcome, show messages
+            welcomeMessage.style.display = 'none';
+
+            // Add user message
+            const userMsg = createUserMessage(abstract);
+            chatContainer.appendChild(userMsg);
+
+            // Add assistant message
+            const assistantMsg = createAssistantMessage();
+            chatContainer.appendChild(assistantMsg);
+            const responseText = assistantMsg.querySelector('.response-text');
+
+            // Update button
+            simplifyBtn.innerHTML = '<div class="spinner"></div>';
             simplifyBtn.disabled = true;
-            outputSection.classList.add('visible');
-            outputContent.innerHTML = '<span class="cursor"></span>';
-            statsDiv.innerHTML = '';
+
+            // Clear input
+            abstractInput.value = '';
+            abstractInput.style.height = 'auto';
+
+            // Scroll to bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
 
             try {
                 const response = await fetch('/summarize/stream', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         abstract: abstract,
                         max_new_tokens: parseInt(maxTokensSlider.value)
@@ -581,9 +844,11 @@ The relationship between computing systems and the brain has served as motivatio
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
 
+                responseText.innerHTML = '<span class="typing-cursor"></span>';
+
                 while (true) {
                     const { done, value } = await reader.read();
-                    
+
                     if (done) break;
 
                     const chunk = decoder.decode(value);
@@ -592,49 +857,51 @@ The relationship between computing systems and the brain has served as motivatio
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
                             const data = line.slice(6);
-                            
+
                             if (data === '[DONE]') {
-                                // Generation complete
                                 const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-                                const tokenCount = generatedText.split(/\s+/).length;
-                                
-                                outputContent.innerHTML = generatedText;
-                                statsDiv.innerHTML = `
-                                    <div class="stat">⏱️ Time: <span>${elapsed}s</span></div>
-                                    <div class="stat">📝 Words: <span>~${tokenCount}</span></div>
+                                const wordCount = generatedText.split(/\s+/).length;
+
+                                responseText.innerHTML = generatedText;
+
+                                // Add stats and actions
+                                const actionsHTML = `
+                                    <div class="message-actions">
+                                        <button class="action-btn copy-btn">📋 Copy</button>
+                                    </div>
+                                    <div class="generation-stats">
+                                        <div class="stat-item">⏱ <span>${elapsed}s</span></div>
+                                        <div class="stat-item">📝 <span>~${wordCount} words</span></div>
+                                    </div>
                                 `;
+                                assistantMsg.querySelector('.message-content').insertAdjacentHTML('beforeend', actionsHTML);
+
+                                // Attach copy handler
+                                assistantMsg.querySelector('.copy-btn').addEventListener('click', () => {
+                                    navigator.clipboard.writeText(generatedText);
+                                    const btn = assistantMsg.querySelector('.copy-btn');
+                                    btn.textContent = '✓ Copied';
+                                    setTimeout(() => btn.textContent = '📋 Copy', 2000);
+                                });
                             } else {
                                 generatedText += data;
-                                outputContent.innerHTML = generatedText + '<span class="cursor"></span>';
-                                // Auto-scroll
-                                outputContent.scrollTop = outputContent.scrollHeight;
+                                responseText.innerHTML = generatedText + '<span class="typing-cursor"></span>';
+                                chatContainer.scrollTop = chatContainer.scrollHeight;
                             }
                         }
                     }
                 }
             } catch (error) {
                 console.error('Error:', error);
-                outputContent.innerHTML = `<span style="color: var(--error)">Error: ${error.message}</span>`;
+                responseText.innerHTML = `<span style="color: var(--error)">Error: ${error.message}</span>`;
             } finally {
                 isGenerating = false;
-                simplifyBtn.innerHTML = '<span class="btn-text">✨ Simplify</span>';
+                simplifyBtn.innerHTML = '<span class="btn-icon">→</span>';
                 simplifyBtn.disabled = false;
             }
         });
 
-        // Copy button
-        copyBtn.addEventListener('click', () => {
-            if (generatedText) {
-                navigator.clipboard.writeText(generatedText).then(() => {
-                    copyBtn.textContent = '✅ Copied!';
-                    setTimeout(() => {
-                        copyBtn.textContent = '📋 Copy';
-                    }, 2000);
-                });
-            }
-        });
-
-        // Allow Ctrl+Enter to submit
+        // Ctrl+Enter to submit
         abstractInput.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 'Enter' && !simplifyBtn.disabled) {
                 simplifyBtn.click();
@@ -642,4 +909,5 @@ The relationship between computing systems and the brain has served as motivatio
         });
     </script>
 </body>
+
 </html>
