@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UnArxiv - Simplify Scientific Abstracts</title>
+    <meta name="description" content="Transform complex arXiv abstracts into plain language anyone can understand">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-tertiary: #1a1a25;
+            --bg-card: linear-gradient(135deg, #15151f 0%, #1a1a28 100%);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(139, 92, 246, 0.3);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-primary: #8b5cf6;
+            --accent-secondary: #a78bfa;
+            --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
+            --success: #10b981;
+            --error: #ef4444;
+            --shadow-glow: 0 0 40px rgba(139, 92, 246, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Animated background */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(139, 92, 246, 0.03) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: 3rem 0;
+            margin-bottom: 2rem;
+        }
+
+        .logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--accent-gradient);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: var(--shadow-glow);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .tagline {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            font-weight: 400;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        /* Status indicator */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.25rem;
+            background: var(--bg-tertiary);
+            border-radius: 50px;
+            font-size: 0.85rem;
+            margin: 1.5rem auto;
+            width: fit-content;
+            border: 1px solid var(--border-color);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            transition: all 0.3s ease;
+        }
+
+        .status-dot.loading {
+            background: #f59e0b;
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-dot.ready {
+            background: var(--success);
+            box-shadow: 0 0 10px var(--success);
+        }
+
+        .status-dot.error {
+            background: var(--error);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        /* Main card */
+        .main-card {
+            background: var(--bg-card);
+            border-radius: 24px;
+            border: 1px solid var(--border-color);
+            padding: 2rem;
+            box-shadow: var(--shadow-glow);
+            backdrop-filter: blur(10px);
+        }
+
+        /* Input section */
+        .input-section {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.75rem;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 1.25rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.95rem;
+            line-height: 1.7;
+            resize: vertical;
+            transition: all 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+        }
+
+        textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .token-control {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .token-control label {
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        input[type="range"] {
+            width: 120px;
+            height: 6px;
+            background: var(--bg-secondary);
+            border-radius: 3px;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--accent-gradient);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+        }
+
+        .token-value {
+            font-weight: 600;
+            color: var(--accent-secondary);
+            min-width: 50px;
+        }
+
+        /* Button */
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.875rem 2rem;
+            background: var(--accent-gradient);
+            color: white;
+            font-weight: 600;
+            font-size: 0.95rem;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 30px rgba(139, 92, 246, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-primary .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Output section */
+        .output-section {
+            display: none;
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .output-section.visible {
+            display: block;
+            animation: fadeIn 0.4s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .output-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .output-header h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .output-header .icon {
+            font-size: 1.2rem;
+        }
+
+        .copy-btn {
+            padding: 0.5rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border-color: var(--accent-primary);
+        }
+
+        .output-content {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 1.5rem;
+            min-height: 150px;
+            font-size: 1rem;
+            line-height: 1.8;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .output-content .cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1.2em;
+            background: var(--accent-primary);
+            margin-left: 2px;
+            animation: blink 0.8s infinite;
+            vertical-align: text-bottom;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* Stats */
+        .stats {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .stat {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .stat span {
+            color: var(--accent-secondary);
+            font-weight: 600;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 3rem 0;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        footer a {
+            color: var(--accent-secondary);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .container {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 1.75rem;
+            }
+
+            .main-card {
+                padding: 1.25rem;
+                border-radius: 16px;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .btn-primary {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .stats {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+    
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">📚</div>
+                <h1>UnArxiv</h1>
+            </div>
+            <p class="tagline">Transform complex scientific abstracts into plain language that anyone can understand</p>
+            
+            <div class="status-bar">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Checking model status...</span>
+            </div>
+        </header>
+
+        <main class="main-card">
+            <div class="input-section">
+                <label for="abstract">Paste your scientific abstract</label>
+                <textarea 
+                    id="abstract" 
+                    placeholder="Paste an arXiv abstract here... For example:
+
+The relationship between computing systems and the brain has served as motivation for pioneering theoreticians since John von Neumann and Alan Turing. Uniform, scale-free biological networks, such as the brain, have powerful properties, including generalizing over time..."
+                ></textarea>
+            </div>
+
+            <div class="controls">
+                <div class="token-control">
+                    <label for="maxTokens">Max tokens:</label>
+                    <input type="range" id="maxTokens" min="100" max="1024" value="512" step="50">
+                    <span class="token-value" id="tokenValue">512</span>
+                </div>
+                <button class="btn-primary" id="simplifyBtn" disabled>
+                    <span class="btn-text">✨ Simplify</span>
+                </button>
+            </div>
+
+            <div class="output-section" id="outputSection">
+                <div class="output-header">
+                    <h3><span class="icon">💡</span> Simplified Explanation</h3>
+                    <button class="copy-btn" id="copyBtn">📋 Copy</button>
+                </div>
+                <div class="output-content" id="outputContent"></div>
+                <div class="stats" id="stats"></div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Powered by fine-tuned <a href="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct" target="_blank">Qwen2.5-3B</a> • 
+            <a href="https://github.com" target="_blank">GitHub</a></p>
+        </footer>
+    </div>
+
+    <script>
+        const abstractInput = document.getElementById('abstract');
+        const maxTokensSlider = document.getElementById('maxTokens');
+        const tokenValue = document.getElementById('tokenValue');
+        const simplifyBtn = document.getElementById('simplifyBtn');
+        const outputSection = document.getElementById('outputSection');
+        const outputContent = document.getElementById('outputContent');
+        const statsDiv = document.getElementById('stats');
+        const copyBtn = document.getElementById('copyBtn');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+
+        let isGenerating = false;
+        let generatedText = '';
+        let startTime = 0;
+
+        // Update token value display
+        maxTokensSlider.addEventListener('input', () => {
+            tokenValue.textContent = maxTokensSlider.value;
+        });
+
+        // Check API health
+        async function checkHealth() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                
+                if (data.model_loaded) {
+                    statusDot.className = 'status-dot ready';
+                    statusText.textContent = `Model ready (${data.device})`;
+                    simplifyBtn.disabled = false;
+                } else {
+                    statusDot.className = 'status-dot loading';
+                    statusText.textContent = 'Loading model...';
+                    simplifyBtn.disabled = true;
+                    // Check again in 5 seconds
+                    setTimeout(checkHealth, 5000);
+                }
+            } catch (error) {
+                statusDot.className = 'status-dot error';
+                statusText.textContent = 'API unavailable';
+                simplifyBtn.disabled = true;
+                // Retry in 10 seconds
+                setTimeout(checkHealth, 10000);
+            }
+        }
+
+        // Initial health check
+        checkHealth();
+
+        // Simplify button handler
+        simplifyBtn.addEventListener('click', async () => {
+            const abstract = abstractInput.value.trim();
+            
+            if (!abstract) {
+                alert('Please enter an abstract to simplify');
+                return;
+            }
+
+            if (isGenerating) return;
+
+            isGenerating = true;
+            generatedText = '';
+            startTime = Date.now();
+
+            // Update UI
+            simplifyBtn.innerHTML = '<div class="spinner"></div><span class="btn-text">Generating...</span>';
+            simplifyBtn.disabled = true;
+            outputSection.classList.add('visible');
+            outputContent.innerHTML = '<span class="cursor"></span>';
+            statsDiv.innerHTML = '';
+
+            try {
+                const response = await fetch('/summarize/stream', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        abstract: abstract,
+                        max_new_tokens: parseInt(maxTokensSlider.value)
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            
+                            if (data === '[DONE]') {
+                                // Generation complete
+                                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                                const tokenCount = generatedText.split(/\s+/).length;
+                                
+                                outputContent.innerHTML = generatedText;
+                                statsDiv.innerHTML = `
+                                    <div class="stat">⏱️ Time: <span>${elapsed}s</span></div>
+                                    <div class="stat">📝 Words: <span>~${tokenCount}</span></div>
+                                `;
+                            } else {
+                                generatedText += data;
+                                outputContent.innerHTML = generatedText + '<span class="cursor"></span>';
+                                // Auto-scroll
+                                outputContent.scrollTop = outputContent.scrollHeight;
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                outputContent.innerHTML = `<span style="color: var(--error)">Error: ${error.message}</span>`;
+            } finally {
+                isGenerating = false;
+                simplifyBtn.innerHTML = '<span class="btn-text">✨ Simplify</span>';
+                simplifyBtn.disabled = false;
+            }
+        });
+
+        // Copy button
+        copyBtn.addEventListener('click', () => {
+            if (generatedText) {
+                navigator.clipboard.writeText(generatedText).then(() => {
+                    copyBtn.textContent = '✅ Copied!';
+                    setTimeout(() => {
+                        copyBtn.textContent = '📋 Copy';
+                    }, 2000);
+                });
+            }
+        });
+
+        // Allow Ctrl+Enter to submit
+        abstractInput.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter' && !simplifyBtn.disabled) {
+                simplifyBtn.click();
+            }
+        });
+    </script>
+</body>
+</html>
