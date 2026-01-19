@@ -33,35 +33,31 @@ def generate_single(model, tokenizer, abstract: str, device: str) -> str:
         {"role": "user", "content": f"Simplify the following scientific abstract into plain language that anyone can understand. Use simple words, short sentences, and everyday analogies.\n\n{abstract}"},
     ]
     
-    inputs = tokenizer.apply_chat_template(
+    # Build text with template, then tokenize separately (HF recommended pattern)
+    text = tokenizer.apply_chat_template(
         messages,
         add_generation_prompt=True,
-        tokenize=True,
-        return_dict=True,
-        return_tensors="pt",
-    ).to(device)
+        tokenize=False,
+    )
+    inputs = tokenizer(text, return_tensors="pt").to(device)
     
     with torch.no_grad():
-        outputs = model.generate(
+        generated_ids = model.generate(
             **inputs,
             max_new_tokens=512,
             do_sample=False,
-            temperature=None,
-            top_p=None,
-            top_k=None,
             eos_token_id=tokenizer.eos_token_id,
             pad_token_id=tokenizer.eos_token_id
         )
     
-    # Decode only the generated portion (exclude input prompt)
-    result = tokenizer.decode(outputs[0][inputs["input_ids"].shape[-1]:], skip_special_tokens=True)
+    # Strip the prompt tokens properly
+    new_token_ids = generated_ids[0][inputs["input_ids"].shape[1]:]
+    result = tokenizer.decode(new_token_ids, skip_special_tokens=True)
     
-    # Clean up tensors
-    del inputs
-    del outputs
+    # Aggressive cleanup
+    del inputs, generated_ids
     gc.collect()
-    if device == "xpu":
-        torch.xpu.empty_cache()
+    torch.xpu.synchronize()
     
     return result.strip()
 
@@ -110,19 +106,6 @@ def main():
             output = generate_single(model, tokenizer, abstract, device)
             logger.info(f"Base output {i+1}: {output[:100]}...")
             outputs.append(output)
-            
-            # Memory cleanup every 5 samples
-            if (i + 1) % 5 == 0:
-                # Clear KV cache if available
-                if hasattr(model, '_clear_kv_cache'):
-                    model._clear_kv_cache()
-                elif hasattr(model, 'model') and hasattr(model.model, '_clear_kv_cache'):
-                    model.model._clear_kv_cache()
-                gc.collect()
-                if device == "xpu":
-                    torch.xpu.synchronize()
-                    torch.xpu.empty_cache()
-                logger.info(f"Memory cleanup (including KV cache) after {i+1} samples")
         
         # Save results
         results = {
@@ -143,7 +126,7 @@ def main():
         del model
         del tokenizer
         gc.collect()
-        torch.xpu.empty_cache()
+        torch.xpu.synchronize()
         
     except Exception as e:
         logger.error(f"Generation failed: {e}")
