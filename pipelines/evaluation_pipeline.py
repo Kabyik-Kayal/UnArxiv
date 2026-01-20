@@ -70,7 +70,8 @@ def main():
         success = run_step(
             "Generate Base Model Outputs",
             [
-                python_exe, "-m", "steps.generate_base_outputs",
+                python_exe, "-m", "steps.generation.generate_outputs",
+                "--model-type", "base",
                 "--test-size", str(args.test_size),
                 "--data-path", args.data_path,
                 "--output-path", base_outputs_path,
@@ -91,7 +92,8 @@ def main():
         success = run_step(
             "Generate Finetuned Model Outputs",
             [
-                python_exe, "-m", "steps.generate_finetuned_outputs",
+                python_exe, "-m", "steps.generation.generate_outputs",
+                "--model-type", "finetuned",
                 "--test-size", str(args.test_size),
                 "--data-path", args.data_path,
                 "--adapter-path", args.adapter_path,
@@ -113,7 +115,7 @@ def main():
         success = run_step(
             "Compute Evaluation Metrics",
             [
-                python_exe, "-m", "steps.compute_metrics",
+                python_exe, "-m", "steps.evaluation.compute_metrics",
                 "--base-outputs", base_outputs_path,
                 "--finetuned-outputs", finetuned_outputs_path,
                 "--output-path", results_path,

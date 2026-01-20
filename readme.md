@@ -222,17 +222,29 @@ UnArxiv/
 │       ├── tokenizer.json
 │       └── ...
 │
-├── steps/                          # Pipeline step modules
+├── steps/                          # Pipeline step modules (organized by phase)
 │   ├── __init__.py
-│   ├── dataset_downloader.py      # Downloads arXiv dataset from HF
-│   ├── abstracts_selector.py      # Random sampling of abstracts
-│   ├── distillation.py            # Teacher model API calls
-│   ├── training_data.py           # Formats data for instruction tuning
-│   ├── finetuning.py              # LoRA training on Intel XPU
-│   ├── generate_base_outputs.py   # Base model generation
-│   ├── generate_finetuned_outputs.py # Finetuned model generation
-│   ├── compute_metrics.py         # ROUGE & readability metrics
-│   └── test_models.py             # Quick comparison script
+│   │
+│   ├── data/                      # Data Preparation Phase
+│   │   ├── __init__.py
+│   │   ├── dataset_downloader.py  # Downloads arXiv dataset from HF
+│   │   ├── abstracts_selector.py  # Random sampling of abstracts
+│   │   ├── distillation.py        # Teacher model API calls (Kimi K2)
+│   │   └── training_data.py       # Formats data for instruction tuning
+│   │
+│   ├── training/                  # Model Training Phase
+│   │   ├── __init__.py
+│   │   └── finetuning.py          # LoRA training on Intel XPU
+│   │
+│   ├── generation/                # Output Generation Phase
+│   │   ├── __init__.py
+│   │   ├── generate_outputs.py    # Unified generator (base & finetuned)
+│   │   └── inference.py           # Standalone inference script
+│   │
+│   └── evaluation/                # Metrics Computation Phase
+│       ├── __init__.py
+│       ├── compute_metrics.py     # ROUGE & readability metrics
+│       └── test_models.py         # Quick comparison script
 │
 ├── pipelines/                      # End-to-end pipeline orchestration
 │   ├── __init__.py
@@ -254,14 +266,15 @@ UnArxiv/
 
 | Module | Purpose |
 |--------|---------|
-| **`steps/dataset_downloader.py`** | Downloads the `ccdv/arxiv-summarization` dataset from Hugging Face |
-| **`steps/abstracts_selector.py`** | Randomly samples 1000 abstracts with reproducible seeding |
-| **`steps/distillation.py`** | Calls Groq API with Kimi K2 to generate simplified versions |
-| **`steps/training_data.py`** | Creates instruction-format JSON for finetuning |
-| **`steps/finetuning.py`** | LoRA training with Intel XPU optimizations |
-| **`steps/generate_base_outputs.py`** | Generates outputs from the base Qwen 2.5 3B model |
-| **`steps/generate_finetuned_outputs.py`** | Generates outputs from the finetuned model |
-| **`steps/compute_metrics.py`** | Computes ROUGE scores and readability metrics |
+| **`steps/data/dataset_downloader.py`** | Downloads the `ccdv/arxiv-summarization` dataset from Hugging Face |
+| **`steps/data/abstracts_selector.py`** | Randomly samples 1000 abstracts with reproducible seeding |
+| **`steps/data/distillation.py`** | Calls Groq API with Kimi K2 to generate simplified versions |
+| **`steps/data/training_data.py`** | Creates instruction-format JSON for finetuning |
+| **`steps/training/finetuning.py`** | LoRA training with Intel XPU optimizations |
+| **`steps/generation/generate_outputs.py`** | Unified generator for base and finetuned models |
+| **`steps/generation/inference.py`** | Standalone inference with progress display |
+| **`steps/evaluation/compute_metrics.py`** | Computes ROUGE scores and readability metrics |
+| **`steps/evaluation/test_models.py`** | Quick comparison between base and finetuned models |
 | **`pipelines/data_preparation.py`** | Orchestrates the entire data preparation workflow |
 | **`pipelines/evaluation_pipeline.py`** | Runs generation and metrics computation in isolated processes |
 | **`api/main.py`** | FastAPI backend for streaming inference and serving the web UI |
@@ -290,7 +303,7 @@ This executes:
 
 ```bash
 # Run LoRA finetuning on Intel Arc GPU
-python -m steps.finetuning
+python -m steps.training.finetuning
 ```
 
 **Checkpoint Resumption**: Training automatically resumes from the last saved checkpoint if one exists. This is useful for:
@@ -379,10 +392,11 @@ Then open your browser to: **http://localhost:8000**
 ### Quick Inference (Python)
 
 ```python
-from steps.inference import load_model, simplify_arxiv
+from steps.generation.inference import load_model_with_progress
+from utils.model_utils import generate_simplification
 
 # Load the finetuned model
-model, tokenizer, device = load_model()
+model, tokenizer, device = load_model_with_progress()
 
 # Simplify an abstract
 abstract = """
@@ -390,7 +404,7 @@ We present a novel approach to quantum error correction that leverages
 topological entanglement entropy in two-dimensional spin systems...
 """
 
-simplified = simplify_arxiv(model, tokenizer, device, abstract)
+simplified = generate_simplification(model, tokenizer, device, abstract)
 print(simplified)
 ```
 
@@ -398,13 +412,13 @@ print(simplified)
 
 ```bash
 # Run inference with built-in test case
-python -m steps.inference
+python -m steps.generation.inference
 
 # Run the complete evaluation pipeline
 python -m pipelines.evaluation_pipeline --test-size 10
 
 # Compare base vs finetuned model (quick test)
-python -m steps.test_models
+python -m steps.evaluation.test_models
 ```
 
 ## Configuration

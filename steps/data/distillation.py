@@ -100,8 +100,8 @@ def data_distillation(abstracts:list, api_key:str=GROQ_API_KEY):
     
 if __name__ == "__main__":
     try:
-        from steps.dataset_downloader import download_arxiv_abstracts
-        from steps.abstracts_selector import select_abstracts
+        from steps.data.dataset_downloader import download_arxiv_abstracts
+        from steps.data.abstracts_selector import select_abstracts
         abstracts = download_arxiv_abstracts()
         selected_abstracts = select_abstracts(abstracts)
         distilled_abstracts = data_distillation(selected_abstracts[:1])

@@ -1,31 +1,21 @@
 """
-UnArxiv Steps Package.
+Data Preparation Steps.
 
-This package contains modular step implementations organized by pipeline phase:
-- data/       : Data acquisition and preparation (download, select, distill, format)
-- training/   : Model finetuning with LoRA
-- generation/ : Output generation for inference and evaluation
-- evaluation/ : Metrics computation and model comparison
+This subpackage handles all data acquisition and preparation:
+- dataset_downloader: Downloads arXiv abstracts from HuggingFace
+- abstracts_selector: Random sampling of abstracts for training
+- distillation: Teacher model API calls via Groq (Kimi K2)
+- training_data: Formats data for instruction tuning
 
 Usage:
-    # Run individual steps
-    python -m steps.training.finetuning
-    python -m steps.generation.inference
-    python -m steps.evaluation.compute_metrics
-    
-    # Or use the pipeline orchestrators
     python -m pipelines.data_preparation
-    python -m pipelines.evaluation_pipeline
 """
 
 __all__ = [
-    # Data
     "download_arxiv_abstracts",
-    "select_abstracts", 
+    "select_abstracts",
     "data_distillation",
     "TrainingDataGenerator",
-    # Generation
-    "load_model_with_progress",
 ]
 
 
@@ -43,7 +33,4 @@ def __getattr__(name):
     elif name == "TrainingDataGenerator":
         from steps.data.training_data import TrainingDataGenerator
         return TrainingDataGenerator
-    elif name == "load_model_with_progress":
-        from steps.generation.inference import load_model_with_progress
-        return load_model_with_progress
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

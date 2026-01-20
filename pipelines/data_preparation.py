@@ -3,10 +3,10 @@ from utils.custom_exception import CustomException
 from utils.save_abstracts import save_abstracts
 import sys
 
-from steps.dataset_downloader import download_arxiv_abstracts
-from steps.abstracts_selector import select_abstracts
-from steps.distillation import data_distillation
-from steps.training_data import TrainingDataGenerator
+from steps.data.dataset_downloader import download_arxiv_abstracts
+from steps.data.abstracts_selector import select_abstracts
+from steps.data.distillation import data_distillation
+from steps.data.training_data import TrainingDataGenerator
 
 logger = get_logger(__name__)
 generator = TrainingDataGenerator()
