@@ -4,7 +4,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Powered_by-Intel_Arc-0071C5?style=for-the-badge&logo=intel" alt="Intel Arc">
-  <img src="https://img.shields.io/badge/Model-Qwen_2.5_3B-green?style=for-the-badge" alt="Qwen">
+  <img src="https://img.shields.io/badge/Model-Qwen_2.5_3B_Instruct-green?style=for-the-badge" alt="Qwen">
   <img src="https://img.shields.io/badge/Framework-PyTorch_XPU-EE4C2C?style=for-the-badge&logo=pytorch" alt="PyTorch">
   <img src="https://img.shields.io/badge/Status-Finetuned_&_Ready-blueviolet?style=for-the-badge" alt="Status">
 
@@ -90,10 +90,15 @@ We evaluated our finetuned model against the base Qwen 2.5 3B model on 10 arXiv 
 - **Content Fidelity**: Higher ROUGE scores indicate better alignment with reference simplifications
 - **Accessibility**: Outputs average at a 7th-grade reading level, accessible to a broader audience
 
-> *"Imagine you're watching tiny beads floating in a stream of water..."*  
-> — Actual output from our finetuned model explaining optical coherence tomography.
-
 The finetuned model consistently uses **everyday analogies** and **conversational language** while preserving the core scientific concepts.
+
+### Summaries Comparison
+
+| **Type** | **Text** |
+|----------|----------|
+| **Original Abstract** | Superperiodic patterns with a long distance in a nanographene sheet observed by stm are discussed in terms of the interference of electronic wave functions. the period and the amplitude of the oscillations decrease spatially in one direction. we explain the superperiodic patterns with a static linear potential theoretically. in the @xmath0 model, the oscillation period decreases, and agrees with experiments. the spatial difference of the static potential is estimated as 1.3 ev for 200 nm in distance, and this value seems to be natural. it turns out that the long - distance oscillations come from the band structure of the two - dimensional graphene sheet. + pacs: 73.61.tm, 73.20.at, 71.10.-w |
+| **Base Model Output** | Scientists used a special microscope called STM to look at a very thin piece of graphene (a material made of carbon atoms arranged in a honeycomb pattern). They noticed some repeating patterns that were spread out over a long distance. These patterns are like when you drop a pebble into a pond and see ripples spreading out. The scientists think these patterns are caused by how electrons move through the graphene. As they looked closer, they found that the spacing between the patterns got smaller in one direction. To explain why this happens, the scientists used a computer model. They found that if there's a small, steady force (like a gentle breeze) pushing on the graphene, it could create these patterns. In their model, they saw that the patterns became less spaced out as they moved away from where the force was applied. The scientists also calculated that the force needed to create these patterns would be about 1.3 volts (which is a measure of electricity) over a distance of 200 nanometers (which is very, very small—about the size of a few atoms). They discovered that these long-distance patterns actually come from the way the electrons are arranged in the graphene. It's like how the arrangement of water molecules in a puddle affects the shape of the ripples. In terms of what kind of research this is, it falls under categories that deal with how materials behave at the atomic level and how forces affect them. |
+| **Finetuned Model Output** | Imagine a tiny graphene sheet (a single layer of carbon atoms) acting like a musical instrument. When we shine a light beam at it, the electrons inside the sheet start to vibrate in a special pattern: they form a series of tiny hills and valleys that repeat every few nanometers but get shorter as you move away from the center. We figured out why these hills and valleys appear: it's because the sheet has a hidden "static" electric field that pushes the electrons slightly in one direction. The longer the push, the more pronounced the hills and valleys become. We calculated how strong this push needs to be to match the real-world observations, finding that it's about 1.3 electron volts over a 200-nanometer distance—just right for the sheet's natural properties. So, the long-distance hills and valleys are not just random bumps; they're a built-in feature of the graphene's electronic structure, telling us something fundamental about how electrons behave in such flat materials. |
 
 ---
 
@@ -288,18 +293,25 @@ This executes:
 python -m steps.finetuning
 ```
 
+**Checkpoint Resumption**: Training automatically resumes from the last saved checkpoint if one exists. This is useful for:
+- Resuming after interruptions (CTRL+C, crashes, system restarts)
+- Continuing training over multiple sessions
+- Recovering from out-of-memory errors
+
+Checkpoints are saved every 100 steps, with the last 3 kept to save disk space.
+
 Training configuration:
 - **Max Sequence Length**: 256 tokens
 - **Micro Batch Size**: 1
 - **Gradient Accumulation**: 16 steps
 - **Learning Rate**: 2e-4
-- **LoRA Rank**: 8 (configurable)
+- **LoRA Rank**: 2 (optimized for 8GB VRAM)
 
 ### Phase 3: Evaluation & Inference
 
 ```bash
 # Run the complete evaluation pipeline (Generation + Metrics)
-python -m pipelines.evaluation_pipeline --test-size 17
+python -m pipelines.evaluation_pipeline --test-size 10
 
 # Run specific parts
 python -m pipelines.evaluation_pipeline --base-only
@@ -389,7 +401,7 @@ print(simplified)
 python -m steps.inference
 
 # Run the complete evaluation pipeline
-python -m pipelines.evaluation_pipeline --test-size 17
+python -m pipelines.evaluation_pipeline --test-size 10
 
 # Compare base vs finetuned model (quick test)
 python -m steps.test_models
