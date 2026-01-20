@@ -67,6 +67,7 @@ def cleanup_memory(device: str = None):
     gc.collect()
     if device == "xpu" or (device is None and torch.xpu.is_available()):
         torch.xpu.synchronize()
+        torch.xpu.empty_cache()
 
 
 # ============================================================================
