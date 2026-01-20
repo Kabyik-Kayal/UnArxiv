@@ -17,7 +17,7 @@ DATA_FILE = "data/training_data.json"
 OUTPUT_DIR = "model/qwen-arxiv-simplified-arc"
 
 # Aggressive memory settings for 8GB
-MAX_SEQ_LENGTH = 256        # Reduced from 512
+MAX_SEQ_LENGTH = 256        
 MICRO_BATCH_SIZE = 1       
 GRADIENT_ACCUMULATION = 16  # Increased from 8
 LEARNING_RATE = 2e-4
@@ -34,6 +34,31 @@ def clear_xpu_memory():
             logging.info("XPU memory cleared successfully")
     except Exception as e:
         logging.warning(f"Failed to clear XPU memory: {str(e)}")
+
+
+def get_latest_checkpoint(output_dir):
+    """Find the latest checkpoint in the output directory."""
+    if not os.path.exists(output_dir):
+        return None
+    
+    # Look for checkpoint directories (e.g., checkpoint-100, checkpoint-200)
+    checkpoints = []
+    for item in os.listdir(output_dir):
+        if item.startswith("checkpoint-"):
+            checkpoint_path = os.path.join(output_dir, item)
+            if os.path.isdir(checkpoint_path):
+                try:
+                    step_num = int(item.split("-")[1])
+                    checkpoints.append((step_num, checkpoint_path))
+                except (ValueError, IndexError):
+                    continue
+    
+    if not checkpoints:
+        return None
+    
+    # Return the checkpoint with the highest step number
+    checkpoints.sort(key=lambda x: x[0], reverse=True)
+    return checkpoints[0][1]
 
 
 def main():
@@ -170,17 +195,26 @@ def main():
         try:
             os.makedirs(OUTPUT_DIR, exist_ok=True)
             
+            # Check for existing checkpoints to resume from
+            resume_checkpoint = get_latest_checkpoint(OUTPUT_DIR)
+            if resume_checkpoint:
+                logging.info(f"Found existing checkpoint: {resume_checkpoint}")
+                logging.info("Training will resume from this checkpoint")
+            else:
+                logging.info("No existing checkpoints found. Starting fresh training.")
+            
             args = TrainingArguments(
                 output_dir=OUTPUT_DIR,
                 per_device_train_batch_size=MICRO_BATCH_SIZE,
                 gradient_accumulation_steps=GRADIENT_ACCUMULATION,
                 warmup_steps=10,
-                max_steps=150,
+                max_steps=500,
                 learning_rate=LEARNING_RATE,
                 bf16=True,
                 logging_steps=15,
                 optim="adamw_torch",
-                save_steps=75,
+                save_steps=100,
+                save_total_limit=3,  # Keep only the last 3 checkpoints to save disk space
                 gradient_checkpointing=True,
                 max_grad_norm=0.3,
                 remove_unused_columns=False,
@@ -212,7 +246,8 @@ def main():
 
         logging.info("Starting training...")
         try:
-            result = trainer.train()
+            # Resume from checkpoint if one exists
+            result = trainer.train(resume_from_checkpoint=resume_checkpoint)
             logging.info(f"Training completed: {result}")
         except torch.OutOfMemoryError as e:
             logging.error("Out of memory error during training")
