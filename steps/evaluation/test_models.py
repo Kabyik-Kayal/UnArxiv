@@ -65,9 +65,9 @@ def main():
         cleanup_memory(device)
         
         # Load and test finetuned model
-        print("\nLoading finetuned LoRA adapter...")
-        ft_model, ft_tokenizer, device = load_finetuned_model(device, merge_weights=True)
-        test_model(ft_model, ft_tokenizer, device, "FINETUNED MODEL (with LoRA)")
+        print("\nLoading finetuned model...")
+        ft_model, ft_tokenizer, device = load_finetuned_model(device)
+        test_model(ft_model, ft_tokenizer, device, "FINETUNED MODEL")
         
         # Cleanup
         del ft_model

@@ -178,7 +178,7 @@ Examples:
             display_name = "Base model"
         else:
             logger.info(f"Loading FINETUNED model with adapter: {args.adapter_path}")
-            model, tokenizer, device = load_finetuned_model(merge_weights=True)
+            model, tokenizer, device = load_finetuned_model()
             model_name = f"Finetuned ({args.adapter_path})"
             display_name = "Finetuned model"
         

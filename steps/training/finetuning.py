@@ -1,7 +1,6 @@
 import torch
 import os
 import warnings
-import gc
 import sys
 import transformers
 from datasets import load_dataset
@@ -9,32 +8,17 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments
 from peft import LoraConfig, get_peft_model
 from utils.logger import logging
 from utils.custom_exception import CustomException
+from utils.model_utils import BASE_MODEL_ID, ADAPTER_PATH, cleanup_memory
 
 warnings.filterwarnings('ignore', message='.*doesn\'t support querying the available free memory.*')
 
-MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
-DATA_FILE = "data/training_data.json" 
-OUTPUT_DIR = "model/qwen-arxiv-simplified-arc"
+DATA_FILE = "data/training_data.json"
 
 # Aggressive memory settings for 8GB
 MAX_SEQ_LENGTH = 256        
 MICRO_BATCH_SIZE = 1       
 GRADIENT_ACCUMULATION = 16  # Increased from 8
 LEARNING_RATE = 2e-4
-
-
-def clear_xpu_memory():
-    """Clear XPU memory cache to free up VRAM."""
-    try:
-        if torch.xpu.is_available():
-            torch.xpu.empty_cache()
-            torch.xpu.synchronize()
-            gc.collect()
-            torch.xpu.empty_cache()
-            logging.info("XPU memory cleared successfully")
-    except Exception as e:
-        logging.warning(f"Failed to clear XPU memory: {str(e)}")
-
 
 def get_latest_checkpoint(output_dir):
     """Find the latest checkpoint in the output directory."""
@@ -63,7 +47,7 @@ def get_latest_checkpoint(output_dir):
 
 def main():
     try:
-        logging.info(f"Initializing fine-tuning for {MODEL_NAME} on Intel Arc...")
+        logging.info(f"Initializing fine-tuning for {BASE_MODEL_ID} on Intel Arc...")
 
         # Check XPU availability
         if not torch.xpu.is_available():
@@ -71,12 +55,12 @@ def main():
         
         device = "xpu"
         logging.info(f"XPU Device: {torch.xpu.get_device_name(0)}")
-        clear_xpu_memory()
+        cleanup_memory(device)
 
         # Load tokenizer
         logging.info("Loading tokenizer...")
         try:
-            tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
+            tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_ID, trust_remote_code=True)
             tokenizer.pad_token_id = tokenizer.eos_token_id if tokenizer.pad_token_id is None else tokenizer.pad_token_id
             tokenizer.padding_side = "right"
             logging.info("Tokenizer loaded successfully")
@@ -130,15 +114,15 @@ def main():
 
         # Load model in FP32 first (on CPU to save VRAM)
         logging.info("Loading model on CPU first...")
-        clear_xpu_memory()
+        cleanup_memory()
         
         try:
             model = AutoModelForCausalLM.from_pretrained(
-                MODEL_NAME,
+                BASE_MODEL_ID,
                 trust_remote_code=True,
-                dtype=torch.float32,  # Load in FP32 on CPU
+                dtype=torch.bfloat16,
                 low_cpu_mem_usage=True,
-                device_map="cpu",  # Keep on CPU initially
+                device_map="cpu",
             )
             logging.info("Model loaded on CPU successfully")
         except Exception as e:
@@ -188,15 +172,15 @@ def main():
         except Exception as e:
             raise CustomException(f"Failed to apply LoRA adapters: {str(e)}", sys)
         
-        clear_xpu_memory()
+        cleanup_memory(device)
 
         # Training args
         logging.info("Setting up training arguments...")
         try:
-            os.makedirs(OUTPUT_DIR, exist_ok=True)
+            os.makedirs(ADAPTER_PATH, exist_ok=True)
             
             # Check for existing checkpoints to resume from
-            resume_checkpoint = get_latest_checkpoint(OUTPUT_DIR)
+            resume_checkpoint = get_latest_checkpoint(ADAPTER_PATH)
             if resume_checkpoint:
                 logging.info(f"Found existing checkpoint: {resume_checkpoint}")
                 logging.info("Training will resume from this checkpoint")
@@ -204,24 +188,24 @@ def main():
                 logging.info("No existing checkpoints found. Starting fresh training.")
             
             args = TrainingArguments(
-                output_dir=OUTPUT_DIR,
+                output_dir=ADAPTER_PATH,
                 per_device_train_batch_size=MICRO_BATCH_SIZE,
                 gradient_accumulation_steps=GRADIENT_ACCUMULATION,
                 warmup_steps=10,
-                max_steps=500,
+                max_steps=300,
                 learning_rate=LEARNING_RATE,
                 bf16=True,
                 logging_steps=15,
                 optim="adamw_torch",
                 save_steps=100,
-                save_total_limit=3,  # Keep only the last 3 checkpoints to save disk space
+                save_total_limit=3,
                 gradient_checkpointing=True,
                 max_grad_norm=0.3,
                 remove_unused_columns=False,
                 dataloader_pin_memory=False,
                 dataloader_num_workers=0,
                 fp16=False,
-                report_to="none",  # Disable wandb/tensorboard to save memory
+                report_to="none",
             )
             logging.info("Training arguments configured")
         except Exception as e:
@@ -264,11 +248,20 @@ def main():
 
         logging.info("Saving adapter and tokenizer...")
         try:
-            trainer.model.save_pretrained(OUTPUT_DIR)
-            tokenizer.save_pretrained(OUTPUT_DIR)
-            logging.info(f"Model and tokenizer saved successfully to {OUTPUT_DIR}")
+            trainer.model.save_pretrained(ADAPTER_PATH)
+            tokenizer.save_pretrained(ADAPTER_PATH)
+            logging.info(f"Model and tokenizer saved successfully to {ADAPTER_PATH}")
         except Exception as e:
             raise CustomException(f"Failed to save model: {str(e)}", sys)
+
+        # Clean up memory after finetuning
+        logging.info("Cleaning up memory after finetuning...")
+        try:
+            del model, trainer, tokenized_dataset, dataset
+            cleanup_memory(device)
+            logging.info("Memory cleanup completed successfully")
+        except Exception as e:
+            logging.warning(f"Memory cleanup encountered an issue: {str(e)}")
             
     except CustomException:
         raise

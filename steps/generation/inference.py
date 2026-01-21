@@ -30,15 +30,15 @@ def load_model_with_progress():
     """
     device = get_device()
     
-    steps = ["Loading base model", "Moving to XPU", "Merging LoRA", "Loading tokenizer"]
+    steps = ["Loading merged model", "Moving to device", "Loading tokenizer"]
     pbar = tqdm(steps, desc="Loading model", unit="step")
     
     # Load model (progress bar is for visual feedback only)
     pbar.set_description("Loading model")
-    model, tokenizer, device = load_finetuned_model(device=device, merge_weights=True)
+    model, tokenizer, device = load_finetuned_model(device=device)
     
     # Update progress to complete
-    for _ in range(4):
+    for _ in range(3):
         pbar.update(1)
     pbar.close()
     

@@ -25,6 +25,7 @@ logger = get_logger(__name__)
 # Model paths
 BASE_MODEL_ID = "Qwen/Qwen2.5-3B-Instruct"
 ADAPTER_PATH = "model/qwen-arxiv-simplified-arc"
+MERGED_MODEL_PATH = "model/qwen-arxiv-simplified-merged"
 
 # Generation defaults
 DEFAULT_MAX_NEW_TOKENS = 512
@@ -113,14 +114,15 @@ def load_base_model(device: str = None):
     return model, tokenizer, device
 
 
-def load_finetuned_model(device: str = None, merge_weights: bool = True):
+def load_finetuned_model(device: str = None):
     """
-    Load the finetuned model with LoRA adapter.
+    Load the finetuned merged model.
+    
+    This loads the pre-merged model from MERGED_MODEL_PATH, which is faster
+    than loading base model + adapters separately.
     
     Args:
         device: Target device ('xpu' or 'cpu'). Auto-detected if None.
-        merge_weights: If True, merge LoRA weights for faster inference.
-                      Recommended for production use.
         
     Returns:
         tuple: (model, tokenizer, device)
@@ -128,11 +130,11 @@ def load_finetuned_model(device: str = None, merge_weights: bool = True):
     if device is None:
         device = get_device()
     
-    logger.info(f"Loading base model: {BASE_MODEL_ID}")
+    logger.info(f"Loading finetuned model: {MERGED_MODEL_PATH}")
     
-    # Load base model with SDPA attention
-    base_model = AutoModelForCausalLM.from_pretrained(
-        BASE_MODEL_ID,
+    # Load merged model
+    model = AutoModelForCausalLM.from_pretrained(
+        MERGED_MODEL_PATH,
         device_map="cpu",
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
@@ -141,26 +143,12 @@ def load_finetuned_model(device: str = None, merge_weights: bool = True):
     
     # Move to target device
     logger.info(f"Moving model to {device}...")
-    base_model = base_model.to(device)
-    base_model.eval()
-    
-    # Load LoRA adapter
-    logger.info(f"Loading LoRA adapter: {ADAPTER_PATH}")
-    peft_model = PeftModel.from_pretrained(base_model, ADAPTER_PATH)
-    
-    if merge_weights:
-        # Merge LoRA weights into base model for faster inference
-        # This eliminates adapter overhead during forward pass
-        logger.info("Merging LoRA weights for faster inference...")
-        model = peft_model.merge_and_unload()
-    else:
-        model = peft_model
-    
+    model = model.to(device)
     model.eval()
     
-    # Load tokenizer from adapter (may have special tokens)
+    # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
-        ADAPTER_PATH,
+        MERGED_MODEL_PATH,
         trust_remote_code=True
     )
     
@@ -254,3 +242,26 @@ def generate_simplification(
     cleanup_memory(device)
     
     return result.strip()
+
+
+# ============================================================================
+# ADAPTER UTILITIES
+# ============================================================================
+
+def delete_adapters():
+    """
+    Delete the adapter directory to save disk space.
+    
+    Call this after merging adapters into the base model, as the adapter
+    files are no longer needed once merged.
+    """
+    import shutil
+    from utils.logger import get_logger
+    logger = get_logger(__name__)
+    
+    if os.path.exists(ADAPTER_PATH):
+        logger.info(f"Deleting adapter directory: {ADAPTER_PATH}")
+        shutil.rmtree(ADAPTER_PATH)
+        logger.info("Adapter directory deleted successfully")
+    else:
+        logger.warning(f"Adapter directory not found: {ADAPTER_PATH}")

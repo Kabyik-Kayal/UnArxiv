@@ -17,9 +17,9 @@ logger = get_logger(__name__)
 def run_step(step_name: str, command: list, cwd: str) -> bool:
     """Run a pipeline step as a subprocess."""
     logger.info(f"Starting: {step_name}")
-    print(f"\n{'='*60}")
+    print('='*60)
     print(f"STEP: {step_name}")
-    print(f"{'='*60}\n")
+    print('='*60)
     
     try:
         result = subprocess.run(
@@ -57,13 +57,13 @@ def main():
     steps_completed = 0
     steps_total = 3 if not (args.base_only or args.finetuned_only or args.metrics_only) else 1
     
-    print("\n" + "="*60)
+    print("="*60)
     print("UNARXIV EVALUATION PIPELINE")
     print("="*60)
     print(f"Test size: {args.test_size}")
     print(f"Data path: {args.data_path}")
     print(f"Adapter path: {args.adapter_path}")
-    print("="*60 + "\n")
+    print("="*60)
     
     # Step 1: Generate base model outputs
     if not args.finetuned_only and not args.metrics_only:
@@ -79,12 +79,12 @@ def main():
             project_root
         )
         if not success:
-            print("\n❌ Pipeline failed at: Generate Base Model Outputs")
+            print("Pipeline failed at: Generate Base Model Outputs")
             sys.exit(1)
         steps_completed += 1
         
         if args.base_only:
-            print(f"\n✅ Base outputs saved to {base_outputs_path}")
+            print(f"Base outputs saved to {base_outputs_path}")
             return
     
     # Step 2: Generate finetuned model outputs
@@ -102,12 +102,12 @@ def main():
             project_root
         )
         if not success:
-            print("\n❌ Pipeline failed at: Generate Finetuned Model Outputs")
+            print("Pipeline failed at: Generate Finetuned Model Outputs")
             sys.exit(1)
         steps_completed += 1
         
         if args.finetuned_only:
-            print(f"\n✅ Finetuned outputs saved to {finetuned_outputs_path}")
+            print(f"Finetuned outputs saved to {finetuned_outputs_path}")
             return
     
     # Step 3: Compute metrics
@@ -123,17 +123,17 @@ def main():
             project_root
         )
         if not success:
-            print("\n❌ Pipeline failed at: Compute Evaluation Metrics")
+            print("Pipeline failed at: Compute Evaluation Metrics")
             sys.exit(1)
         steps_completed += 1
     
-    print("\n" + "="*60)
-    print("✅ PIPELINE COMPLETED SUCCESSFULLY")
+    print("="*60)
+    print("PIPELINE COMPLETED SUCCESSFULLY")
     print("="*60)
     print(f"Base outputs: {base_outputs_path}")
     print(f"Finetuned outputs: {finetuned_outputs_path}")
     print(f"Evaluation results: {results_path}")
-    print("="*60 + "\n")
+    print("="*60)
 
 
 if __name__ == "__main__":

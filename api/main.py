@@ -109,7 +109,7 @@ async def lifespan(app: FastAPI):
     loop = asyncio.get_event_loop()
     model, tokenizer, device = await loop.run_in_executor(
         None,
-        lambda: load_finetuned_model(merge_weights=True)
+        lambda: load_finetuned_model()
     )
     
     logger.info("Model ready for inference")
