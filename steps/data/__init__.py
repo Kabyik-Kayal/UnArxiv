@@ -2,8 +2,7 @@
 Data Preparation Steps.
 
 This subpackage handles all data acquisition and preparation:
-- dataset_downloader: Downloads arXiv abstracts from HuggingFace
-- abstracts_selector: Random sampling of abstracts for training
+- dataset_downloader: Downloads and randomly samples arXiv abstracts from HuggingFace (streaming mode)
 - distillation: Teacher model API calls via Groq (Kimi K2)
 - training_data: Formats data for instruction tuning
 
@@ -13,7 +12,6 @@ Usage:
 
 __all__ = [
     "download_arxiv_abstracts",
-    "select_abstracts",
     "data_distillation",
     "TrainingDataGenerator",
 ]
@@ -24,9 +22,6 @@ def __getattr__(name):
     if name == "download_arxiv_abstracts":
         from steps.data.dataset_downloader import download_arxiv_abstracts
         return download_arxiv_abstracts
-    elif name == "select_abstracts":
-        from steps.data.abstracts_selector import select_abstracts
-        return select_abstracts
     elif name == "data_distillation":
         from steps.data.distillation import data_distillation
         return data_distillation

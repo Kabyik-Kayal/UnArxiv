@@ -227,8 +227,7 @@ UnArxiv/
 │   │
 │   ├── data/                      # Data Preparation Phase
 │   │   ├── __init__.py
-│   │   ├── dataset_downloader.py  # Downloads arXiv dataset from HF
-│   │   ├── abstracts_selector.py  # Random sampling of abstracts
+│   │   ├── dataset_downloader.py  # Downloads & samples arXiv abstracts (streaming)
 │   │   ├── distillation.py        # Teacher model API calls (Kimi K2)
 │   │   └── training_data.py       # Formats data for instruction tuning
 │   │
@@ -266,8 +265,7 @@ UnArxiv/
 
 | Module | Purpose |
 |--------|---------|
-| **`steps/data/dataset_downloader.py`** | Downloads the `ccdv/arxiv-summarization` dataset from Hugging Face |
-| **`steps/data/abstracts_selector.py`** | Randomly samples 1000 abstracts with reproducible seeding |
+| **`steps/data/dataset_downloader.py`** | Downloads and randomly samples abstracts from Hugging Face via streaming |
 | **`steps/data/distillation.py`** | Calls Groq API with Kimi K2 to generate simplified versions |
 | **`steps/data/training_data.py`** | Creates instruction-format JSON for finetuning |
 | **`steps/training/finetuning.py`** | LoRA training with Intel XPU optimizations |
@@ -294,10 +292,9 @@ python -m pipelines.data_preparation
 
 This executes:
 
-1. **Download** → Fetches ~200K abstracts from the arXiv summarization dataset
-2. **Select** → Randomly samples 1000 abstracts (configurable)
-3. **Distill** → Sends each abstract to Kimi K2 via Groq API for simplification
-4. **Format** → Creates instruction-tuning pairs in JSON format
+1. **Download & Sample** → Streams and randomly samples 1000 abstracts from arXiv (configurable)
+2. **Distill** → Sends each abstract to Kimi K2 via Groq API for simplification
+3. **Format** → Creates instruction-tuning pairs in JSON format
 
 ### Phase 2: Finetuning
 

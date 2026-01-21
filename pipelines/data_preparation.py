@@ -4,7 +4,6 @@ from utils.save_abstracts import save_abstracts
 import sys
 
 from steps.data.dataset_downloader import download_arxiv_abstracts
-from steps.data.abstracts_selector import select_abstracts
 from steps.data.distillation import data_distillation
 from steps.data.training_data import TrainingDataGenerator
 
@@ -14,17 +13,15 @@ generator = TrainingDataGenerator()
 def data_preparation():
     """
     Complete data preparation pipeline:
-    1. Download abstracts.
-    2. Select a subset of abstracts.
-    3. Save selected abstracts.
-    4. Distill selected abstracts.
-    5. Save distilled abstracts.
-    6. Create Training data combining the distilled abstracts with selected abstracts.
+    1. Download and sample abstracts (random sampling via streaming).
+    2. Save selected abstracts.
+    3. Distill selected abstracts.
+    4. Save distilled abstracts.
+    5. Create Training data combining the distilled abstracts with selected abstracts.
     """
     try:
         logger.info("Starting data preparation pipeline...")
-        abstracts = download_arxiv_abstracts()
-        selected_abstracts = select_abstracts(abstracts)
+        selected_abstracts = download_arxiv_abstracts()
         save_abstracts(selected_abstracts, file_path="data/selected_abstracts.json")
         distilled_abstracts = data_distillation(selected_abstracts)
         save_abstracts(distilled_abstracts, file_path="data/distilled_abstracts.json")
