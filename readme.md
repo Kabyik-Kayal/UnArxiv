@@ -140,6 +140,16 @@ The finetuned model consistently uses **everyday analogies** and **conversationa
 │                              ┌──────────────────────────────┐               │
 │                              │    LoRA Adapter Checkpoint   │               │
 │                              └─────────────┬────────────────┘               │
+│                                            │                                │
+│                                            ▼                                │
+│                              ┌──────────────────────────────┐               │
+│                              │    Merge Adapters with Base  │               │
+│                              └─────────────┬────────────────┘               │
+│                                            │                                │
+│                                            ▼                                │
+│                              ┌──────────────────────────────┐               │
+│                              │  Standalone Finetuned Model  │               │
+│                              └─────────────┬────────────────┘               │
 └────────────────────────────────────────────┼────────────────────────────────┘
                                              │
                                              ▼
@@ -147,14 +157,17 @@ The finetuned model consistently uses **everyday analogies** and **conversationa
 │                          EVALUATION & INFERENCE                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│        ┌────────────────────────────┐    ┌─────────────────────────┐        │
-│        │    Evaluation Suite        │    │      Inference API      │        │
-│        │  (ROUGE + Readability)     │    └────────────┬────────────┘        │
-│        └────────────────────────────┘                 │                     │
-│                                                       ▼                     │
-│                                         ┌─────────────────────────┐         │
-│                                         │   Simplified Abstract   │         │
-│                                         └─────────────────────────┘         │
+│   EVALUATION PIPELINE                        INFERENCE API                  │
+│   ┌─────────────────────────────────┐        ┌────────────────────────┐     │
+│   │  1. Generate Base Outputs       │        │    FastAPI + SSE       │     │
+│   │  2. Generate Finetuned Outputs  │        │   (Streaming Output)   │     │
+│   │  3. Compute ROUGE + Readability │        └───────────┬────────────┘     │
+│   └─────────────────────────────────┘                    │                  │
+│                    │                                     ▼                  │
+│                    ▼                       ┌─────────────────────────┐      │
+│     ┌──────────────────────────┐           │   Simplified Abstract   │      │
+│     │  Evaluation Results JSON │           └─────────────────────────┘      │
+│     └──────────────────────────┘                                            │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -165,33 +178,92 @@ The finetuned model consistently uses **everyday analogies** and **conversationa
 │                        KNOWLEDGE DISTILLATION PIPELINE                      │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-     HF arXiv Dataset              Teacher Model             Training Data
-        │                      (Kimi K2)                      │
-        │                          │                          │
-        │    Complex Abstract      │                          │
-        │────────────▶───────────▶│                          │
-        │                          │                          │
-        │                          │   Simplified Version     │
-        │                          │────▶───────────────────▶│
-        │                          │                          │
-        │                          │         ┌────────────────┴───────────────┐
-        │                          │         │ Instruction/Input/Output pairs │
-        │                          │         └────────────────┬───────────────┘
-        │                          │                          │
-        │                          │                          │
-    Student Model  ◀───────────────────── Finetuning with LoRA
-   (Qwen 2.5 3B)                                              
-        │                                                     
-        │ ◀──────────── Learn simplification patterns         
-        │                                                     
-        │                                                     
-      User ─────────────▶ New Abstract ─────────────▶ Student Model
-                                                          │
-                                                          │
-                                                          ▼
-                                              ┌───────────────────────┐
-                                              │ Plain English Output  │
-                                              └───────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STEP 1: DATA COLLECTION                                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│     HuggingFace arXiv Dataset ──▶ Streaming Download ──▶ Random Sampling    │
+│            (ccdv/arxiv-summarization)           (1000 abstracts)            │
+│                                                                             │
+│     Output: data/selected_abstracts.json                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STEP 2: TEACHER DISTILLATION (Groq API + Kimi K2)                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   For each abstract:                                                        │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │ Complex Abstract ──▶ Groq API ──▶ Kimi K2 Model ──▶ Simplified Text │   │
+│   │                      (streaming)                                    │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│   Rate Limiting: 5 second delay between API calls                           │
+│   Model: moonshotai/kimi-k2-instruct-0905                                   │
+│   Temperature: 0.6 | Max Tokens: 4096 | Response: Streamed                  │
+│                                                                             │
+│   Distillation Prompt Guidelines:                                           │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │ • Target: First-year undergraduate (any major)                      │   │
+│   │ • Tone: Curious, friendly, engaging (no hype)                       │   │
+│   │ • Max Length: 200 words                                             │   │
+│   │ • Preserve: Main problem, approach, key findings, implications      │   │
+│   │ • Replace jargon with plain language, define technical terms        │   │
+│   │ • Use 1-2 concrete analogies or real-world examples                 │   │
+│   │ • Explain WHY the research matters (impact/usefulness)              │   │
+│   │ • Prefer short sentences and active voice                           │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│   Output: data/distilled_abstracts.json                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STEP 3: TRAINING DATA GENERATION                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Combine Original + Distilled into Instruction-Tuning Format:              │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │ {                                                                   │   │
+│   │   "instruction": "Simplify this abstract for a general audience",  │   │
+│   │   "input": "<original abstract>",                                   │   │
+│   │   "output": "<teacher-generated simplification>"                    │   │
+│   │ }                                                                   │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│   Output: data/training_data.json                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STEP 4: STUDENT MODEL FINETUNING                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Qwen 2.5 3B Base ──▶ LoRA Finetuning (Intel Arc XPU) ──▶ Student Model    │
+│                                                                             │
+│   The student learns to mimic the teacher's simplification patterns:        │
+│   • Explain concepts using everyday language                                │
+│   • Use analogies to clarify complex ideas                                  │
+│   • Focus on WHY research matters, not just WHAT was done                   │
+│                                                                             │
+│   Output: model/qwen-arxiv-simplified-merged/                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  INFERENCE                                                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│        User ──▶ New Abstract ──▶ Finetuned Student Model                    │
+│                                         │                                   │
+│                                         ▼                                   │
+│                               ┌───────────────────────┐                     │
+│                               │ Plain English Output  │                     │
+│                               │ (No API calls needed) │                     │
+│                               └───────────────────────┘                     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -216,9 +288,10 @@ UnArxiv/
 │   └── training_data.json         # Final instruction-tuning dataset
 │
 ├── model/                          # Trained model artifacts
-│   └── qwen-arxiv-simplified-arc/ # LoRA adapter weights & tokenizer
-│       ├── adapter_config.json
-│       ├── adapter_model.safetensors
+│   └── qwen-arxiv-simplified-merged/  # Merged standalone model (adapters deleted after merge)
+│       ├── config.json
+│       ├── model-00001-of-00002.safetensors
+│       ├── model-00002-of-00002.safetensors
 │       ├── tokenizer.json
 │       └── ...
 │
@@ -233,7 +306,8 @@ UnArxiv/
 │   │
 │   ├── training/                  # Model Training Phase
 │   │   ├── __init__.py
-│   │   └── finetuning.py          # LoRA training on Intel XPU
+│   │   ├── finetuning.py          # LoRA training on Intel XPU
+│   │   └── model_merger.py        # Merges LoRA adapters with base model
 │   │
 │   ├── generation/                # Output Generation Phase
 │   │   ├── __init__.py
@@ -248,6 +322,7 @@ UnArxiv/
 ├── pipelines/                      # End-to-end pipeline orchestration
 │   ├── __init__.py
 │   ├── data_preparation.py        # Data prep pipeline
+│   ├── finetuning_model.py        # Finetuning + merging pipeline
 │   └── evaluation_pipeline.py     # Evaluation pipeline
 │
 ├── utils/                          # Shared utilities
@@ -257,8 +332,11 @@ UnArxiv/
 │   ├── model_utils.py             # Shared model loading & generation logic
 │   └── save_abstracts.py          # JSON serialization helpers
 │
-└── logs/                           # Runtime log files
-    └── log_YYYY-MM-DD.log
+└── logs/                           # Runtime logs & evaluation outputs
+    ├── log_YYYY-MM-DD.log         # Daily log files
+    ├── base_outputs.json          # Base model outputs (evaluation)
+    ├── finetuned_outputs.json     # Finetuned model outputs (evaluation)
+    └── evaluation_results.json    # Final metrics & comparison
 ```
 
 ### Module Descriptions
@@ -269,11 +347,13 @@ UnArxiv/
 | **`steps/data/distillation.py`** | Calls Groq API with Kimi K2 to generate simplified versions |
 | **`steps/data/training_data.py`** | Creates instruction-format JSON for finetuning |
 | **`steps/training/finetuning.py`** | LoRA training with Intel XPU optimizations |
+| **`steps/training/model_merger.py`** | Merges LoRA adapters with base model for faster inference |
 | **`steps/generation/generate_outputs.py`** | Unified generator for base and finetuned models |
 | **`steps/generation/inference.py`** | Standalone inference with progress display |
 | **`steps/evaluation/compute_metrics.py`** | Computes ROUGE scores and readability metrics |
 | **`steps/evaluation/test_models.py`** | Quick comparison between base and finetuned models |
 | **`pipelines/data_preparation.py`** | Orchestrates the entire data preparation workflow |
+| **`pipelines/finetuning_model.py`** | Runs finetuning and model merging in isolated processes |
 | **`pipelines/evaluation_pipeline.py`** | Runs generation and metrics computation in isolated processes |
 | **`api/main.py`** | FastAPI backend for streaming inference and serving the web UI |
 | **`utils/model_utils.py`** | Shared logic for device management, model loading, and text generation |
@@ -299,9 +379,24 @@ This executes:
 ### Phase 2: Finetuning
 
 ```bash
-# Run LoRA finetuning on Intel Arc GPU
-python -m steps.training.finetuning
+# Run the complete finetuning pipeline (finetune + merge)
+python -m pipelines.finetuning_model
+
+# Skip finetuning and only merge existing adapters
+python -m pipelines.finetuning_model --skip-finetuning
+
+# Keep adapter files after merging (don't delete)
+python -m pipelines.finetuning_model --keep-adapters
+
+# Only run the merge step
+python -m pipelines.finetuning_model --merge-only
 ```
+
+The finetuning pipeline runs each step as a separate subprocess to ensure complete memory isolation:
+
+1. **Finetune** → Trains LoRA adapters on training data
+2. **Merge** → Merges adapters with base model for faster inference
+3. **Cleanup** → Deletes adapter files to save disk space (optional)
 
 **Checkpoint Resumption**: Training automatically resumes from the last saved checkpoint if one exists. This is useful for:
 - Resuming after interruptions (CTRL+C, crashes, system restarts)
@@ -311,6 +406,7 @@ python -m steps.training.finetuning
 Checkpoints are saved every 100 steps, with the last 3 kept to save disk space.
 
 Training configuration:
+- **Max Steps**: 300
 - **Max Sequence Length**: 256 tokens
 - **Micro Batch Size**: 1
 - **Gradient Accumulation**: 16 steps
@@ -428,7 +524,7 @@ python -m steps.evaluation.test_models
 
 ### Training Hyperparameters
 
-Located in `steps/finetuning.py`:
+Located in `steps/training/finetuning.py`:
 
 ```python
 MAX_SEQ_LENGTH = 256        # Maximum token length
@@ -441,8 +537,8 @@ LEARNING_RATE = 2e-4        # AdamW learning rate
 
 ```python
 LoraConfig(
-    r=8,                    # Rank
-    lora_alpha=32,          # Scaling factor
+    r=2,                    # Rank (minimal for 8GB VRAM)
+    lora_alpha=8,           # Scaling factor
     target_modules=["q_proj", "v_proj"],
     lora_dropout=0.05,
     bias="none",
